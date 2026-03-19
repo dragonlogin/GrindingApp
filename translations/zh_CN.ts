@@ -63,5 +63,9 @@
         <source>STEP Files (*.step *.stp)</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Import Workpiece</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

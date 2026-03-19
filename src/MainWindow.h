@@ -14,6 +14,12 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override = default;
 
+private slots:
+	void OnImportWorkpiece();
+	void OnViewFront();
+	void OnViewTop();
+	void OnViewSide();
+	void OnViewIsometric();
 private:
     // MainWindow.h 新增
     void SwitchLanguage(const QString& lang);
