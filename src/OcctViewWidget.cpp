@@ -32,6 +32,58 @@ void OcctViewWidget::showEvent(QShowEvent* e)
 	if (!initialized_) InitOcct();
 }
 
+void OcctViewWidget::mousePressEvent(QMouseEvent* e)
+{
+	last_pos_ = e->pos();
+	if (e->button() == Qt::RightButton) {
+		rotating_ = true;
+		view_->StartRotation(e->pos().x(), e->pos().y());
+	}
+
+	if (e->button() == Qt::LeftButton)
+		panning_ = true;
+}
+
+void OcctViewWidget::mouseMoveEvent(QMouseEvent* e)
+{
+	if (!initialized_)
+		return;
+
+	const int dx = e->pos().x() - last_pos_.x();
+	const int dy = e->pos().y() - last_pos_.y();
+
+	if (rotating_) {
+		view_->Rotation(e->pos().x(), e->pos().y());
+	}
+	else if (panning_) {
+		view_->Pan(dx, -dy);
+	}	
+
+	last_pos_ = e->pos();
+	view_->Redraw();
+}
+
+void OcctViewWidget::mouseReleaseEvent(QMouseEvent* e)
+{
+	if (e->button() == Qt::RightButton)
+		rotating_ = false;
+	if (e->button() == Qt::LeftButton)
+		panning_ = false;
+
+	view_->Redraw();
+}
+
+void OcctViewWidget::wheelEvent(QWheelEvent* e)
+{
+	if (!initialized_)
+		return;
+
+	const double factor = e->angleDelta().y() > 0 ? 1.1 : 0.9;
+	view_->SetZoom(factor, true);
+	view_->Redraw();
+
+}
+
 void OcctViewWidget::InitOcct()
 {
 	// 1. Graphic driver£¨Windows ´«¿Õ DisplayConnection£©

@@ -28,6 +28,11 @@ protected:
 	void resizeEvent(QResizeEvent* e) override;
 	void showEvent(QShowEvent* e) override;
 
+	void mousePressEvent(QMouseEvent* e) override;
+	void mouseMoveEvent(QMouseEvent* e) override;
+	void mouseReleaseEvent(QMouseEvent* e) override;
+	void wheelEvent(QWheelEvent* e) override;
+
 private:
 	void InitOcct();
 
@@ -36,4 +41,10 @@ private:
 	Handle(AIS_InteractiveContext) context_;
 	Handle(WNT_Window)             occtWindow_;
 	bool                           initialized_ = false;
+
+
+	// ÓÒ¼üĞı×ª / ×ó¼üÆ½ÒÆ / ¹öÂÖËõ·Å
+	QPoint   last_pos_;
+	bool     rotating_ = false;
+	bool     panning_ = false;
 };
