@@ -55,9 +55,5 @@
         <source>Fit All</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>3D Viewer</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 </TS>

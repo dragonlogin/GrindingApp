@@ -8,6 +8,8 @@
 #include <QSettings>
 #include <QMessageBox>
 
+#include "OcctViewWidget.h"
+
 MainWindow::MainWindow(QWidget* parent)
 	: QMainWindow(parent)
 {
@@ -77,8 +79,6 @@ void MainWindow::SetupStatusBar()
 
 void MainWindow::SetupCentralWidget()
 {
-	QLabel* placeholder = new QLabel(tr("3D Viewer"));
-	placeholder->setAlignment(Qt::AlignCenter);
-	placeholder->setStyleSheet("background:#2b2b2b; color:#888; font-size:16px;");
-	setCentralWidget(placeholder);
+	viewer_ = new OcctViewWidget(this);
+	setCentralWidget(viewer_);
 }

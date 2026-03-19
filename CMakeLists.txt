@@ -22,23 +22,33 @@ find_package(Qt5LinguistTools REQUIRED)
 find_package(OpenCASCADE REQUIRED)
 
 # 收集源文件
-set(SOURCES
+set(Header
+    src/MainWindow.h
+    src/OcctViewWidget.h
+)
+
+set(Source
     src/main.cpp
     src/MainWindow.cpp
-    src/MainWindow.h
+    src/OcctViewWidget.cpp
 )
+
+source_group("Header" FILES ${Header})
+source_group("Source" FILES ${Source})
+
 set(TS_FILES translations/zh_CN.ts)
 
 # 生成/更新 .ts 文件
 qt5_create_translation(QM_FILES 
-    ${SOURCES}
+    ${Header}
+    ${Source}
     ${TS_FILES}
 )
 
 
 add_executable(GrindingApp 
     ${QM_FILES}
-    ${SOURCES}
+    ${Source}
 )
 
 target_include_directories(GrindingApp PRIVATE
@@ -51,13 +61,40 @@ target_link_libraries(GrindingApp PRIVATE
     Qt5::Gui
     Qt5::Widgets
     Qt5::OpenGL
-    TKBRep
-    TKGeomBase
+
+     # 核心数学和几何库
+    TKernel
     TKMath
-    TKG3d
     TKG2d
+    TKG3d
+    TKGeomBase
+    TKGeomAlgo
+    TKBRep
     TKTopAlgo
+    
+    # 3D显示和可视化
+    TKV3d
+    TKOpenGl
+    TKService
+    TKMeshVS
+    
+    # 建模和特征
     TKPrim
+    TKBool
+    TKBO
+    TKFeat
+    TKFillet
+    TKOffset
+    TKShHealing
+    
+    # CAD格式支持
+    TKCAF
+    TKCDF
+    TKStd
+    
+    # 网格处理
+    TKMesh
+    TKRWMesh
 )
 
 # 设置输出目录
