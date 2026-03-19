@@ -1,0 +1,8 @@
+{
+  "name": "grinding-app",
+  "version": "0.1.0",
+  "dependencies": [
+    "qt5-base",
+    "opencascade"
+  ]
+}
