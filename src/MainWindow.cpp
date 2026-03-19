@@ -7,8 +7,10 @@
 #include <QApplication>
 #include <QSettings>
 #include <QMessageBox>
+#include <QFileDialog>
 
 #include "OcctViewWidget.h"
+#include "StepImporter.h"
 
 MainWindow::MainWindow(QWidget* parent)
 	: QMainWindow(parent)
@@ -33,8 +35,14 @@ void MainWindow::SetupMenuBar()
 {
 	// 文件菜单
 	QMenu* fileMenu = menuBar()->addMenu(tr("File(&F)"));
-	fileMenu->addAction(tr("Import Workpiece(&I)"), this, [] { /* 后续实现 */ },
-		QKeySequence("Ctrl+O"));
+	fileMenu->addAction(tr("Import Workpiece(&I)"), this, [this] (){
+		QString path = QFileDialog::getOpenFileName(
+			this, tr("Open STEP File"), "", tr("STEP Files (*.step *.stp)"));
+		if (path.isEmpty()) 
+			return;
+		int face_count = 0;
+		StepImporter::Load(path, &face_count);
+		}, QKeySequence("Ctrl+O"));
 	fileMenu->addSeparator();
 	fileMenu->addAction(tr("Exit(&Q)"), qApp, &QApplication::quit,
 		QKeySequence("Ctrl+Q"));

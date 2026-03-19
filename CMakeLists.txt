@@ -25,12 +25,14 @@ find_package(OpenCASCADE REQUIRED)
 set(Header
     src/MainWindow.h
     src/OcctViewWidget.h
+    src/StepImporter.h
 )
 
 set(Source
     src/main.cpp
     src/MainWindow.cpp
     src/OcctViewWidget.cpp
+    src/StepImporter.cpp
 )
 
 source_group("Header" FILES ${Header})
@@ -95,6 +97,14 @@ target_link_libraries(GrindingApp PRIVATE
     # 网格处理
     TKMesh
     TKRWMesh
+
+    # CAD格式支持
+    TKDESTEP
+    #TKSTEP
+    #TKSTEP209
+    #TKSTEPAttr
+    #TKSTEPBase
+    TKXSBase
 )
 
 # 设置输出目录

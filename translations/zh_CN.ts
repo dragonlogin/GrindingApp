@@ -55,5 +55,13 @@
         <source>Fit All</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Open STEP File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>STEP Files (*.step *.stp)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

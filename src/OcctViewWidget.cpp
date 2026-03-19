@@ -56,7 +56,7 @@ void OcctViewWidget::mouseMoveEvent(QMouseEvent* e)
 		view_->Rotation(e->pos().x(), e->pos().y());
 	}
 	else if (panning_) {
-		view_->Pan(dx, -dy);
+		view_->Pan(dx, -dy); 
 	}	
 
 	last_pos_ = e->pos();
