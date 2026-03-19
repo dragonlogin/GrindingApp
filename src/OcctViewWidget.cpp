@@ -9,6 +9,7 @@
 #include <V3d_View.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <Quantity_Color.hxx>
+#include <Aspect_TypeOfTriedronPosition.hxx>
 
 #include <QShowEvent>
 #include <QResizeEvent>
@@ -61,6 +62,7 @@ void OcctViewWidget::InitOcct()
 
 	// 6. Ê×´ÎäÖÈ¾
 	view_->MustBeResized();
+	view_->TriedronDisplay(Aspect_TOTP_LEFT_LOWER, Quantity_NOC_WHITE, 0.2, V3d_ZBUFFER);
 	view_->Redraw();
 
 	initialized_ = true;
