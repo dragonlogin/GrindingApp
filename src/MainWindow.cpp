@@ -9,6 +9,9 @@
 #include <QMessageBox>
 #include <QFileDialog>
 
+#include <AIS_Shape.hxx>
+#include <AIS_InteractiveContext.hxx>
+
 #include "OcctViewWidget.h"
 #include "StepImporter.h"
 
@@ -35,13 +38,18 @@ void MainWindow::SetupMenuBar()
 {
 	// ÎÄ¼þ²Ëµ¥
 	QMenu* fileMenu = menuBar()->addMenu(tr("File(&F)"));
-	fileMenu->addAction(tr("Import Workpiece(&I)"), this, [this] (){
+	fileMenu->addAction(tr("Import Workpiece(&I)"), this, [this]{
 		QString path = QFileDialog::getOpenFileName(
 			this, tr("Open STEP File"), "", tr("STEP Files (*.step *.stp)"));
 		if (path.isEmpty()) 
 			return;
 		int face_count = 0;
-		StepImporter::Load(path, &face_count);
+		auto shape = StepImporter::Load(path, &face_count);
+		if (shape.IsNull())
+			return;
+
+		Handle(AIS_Shape) ais_shape = new AIS_Shape(shape);
+		viewer_->Context()->Display(ais_shape, Standard_True);
 		}, QKeySequence("Ctrl+O"));
 	fileMenu->addSeparator();
 	fileMenu->addAction(tr("Exit(&Q)"), qApp, &QApplication::quit,
