@@ -8,6 +8,7 @@
 #include <QSettings>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QFileInfo>
 
 #include <AIS_Shape.hxx>
 #include <AIS_InteractiveContext.hxx>
@@ -77,11 +78,11 @@ void MainWindow::SetupToolBar()
 
 void MainWindow::SetupStatusBar()
 {
-	modelInfo_ = new QLabel("No model loaded");
-	coordLabel_ = new QLabel("X: - Y: - Z: -");
+	model_info_ = new QLabel("No model loaded");
+	coord_label_ = new QLabel("X: - Y: - Z: -");
 
-	statusBar()->addWidget(modelInfo_, 1);
-	statusBar()->addPermanentWidget(coordLabel_);
+	statusBar()->addWidget(model_info_, 1);
+	statusBar()->addPermanentWidget(coord_label_);
 }
 
 void MainWindow::SetupCentralWidget()
@@ -104,6 +105,9 @@ void MainWindow::OnImportWorkpiece()
 	Handle(AIS_Shape) ais_shape = new AIS_Shape(shape);
 	viewer_->Context()->Display(ais_shape, Standard_True);
 	viewer_->View()->FitAll();
+
+	QString file_name = QFileInfo(path).fileName();
+	model_info_->setText(tr("File: %1 | Face: %2").arg(file_name).arg(face_count));
 }
 
 void MainWindow::OnViewFront() 

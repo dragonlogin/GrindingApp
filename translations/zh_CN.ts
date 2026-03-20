@@ -67,5 +67,9 @@
         <source>Import Workpiece</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>File: %1 | Face: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

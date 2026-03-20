@@ -32,7 +32,7 @@ private:
     void SetupStatusBar();
     void SetupCentralWidget();
 
-    QLabel* modelInfo_;   // 状态栏：模型信息
-    QLabel* coordLabel_;  // 状态栏：坐标显示
+    QLabel* model_info_;   // 状态栏：模型信息
+    QLabel* coord_label_;  // 状态栏：坐标显示
     OcctViewWidget* viewer_ = nullptr;
 };
