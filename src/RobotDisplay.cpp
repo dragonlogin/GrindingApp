@@ -11,21 +11,22 @@ gp_Trsf DhTrsf(double theta_deg, double d, double a, double alpha_deg)
 	double ca = cos(al), sa = sin(al);
 
 	gp_Trsf trsf;
+	// Craig (Modified D-H) convention: Rx(alpha) * Tx(a) * Rz(theta) * Tz(d)
 	trsf.SetValues(
-		ct, -st * ca, st * sa, a * ct,
-		st, ct * ca, -ct * sa, a * st,
-		0.0, sa, ca, d
+		ct,       -st,      0.0,   a,
+		st * ca,   ct * ca, -sa,  -d * sa,
+		st * sa,   ct * sa,  ca,   d * ca
 	);
 	return trsf;
 }
 
 gp_Trsf RpyPosTrsf(const double rpy[3], const double pos[3])
 {
-	double cr = cos(rpy[0] * kDeg), sr = sin(rpy[0] * kDeg);
-	double cp = cos(rpy[1] * kDeg), sp = sin(rpy[1] * kDeg);
-	double cy = cos(rpy[2] * kDeg), sy = sin(rpy[2] * kDeg);
+	double cy = cos(rpy[0] * kDeg), sy = sin(rpy[0] * kDeg);  // rpy[0] = Z (yaw)
+	double cp = cos(rpy[1] * kDeg), sp = sin(rpy[1] * kDeg);  // rpy[1] = Y (pitch)
+	double cr = cos(rpy[2] * kDeg), sr = sin(rpy[2] * kDeg);  // rpy[2] = X (roll)
 
-	// R = Rz(yaw) * Ry(pitch) * Rx(roll)
+	// R = Rz(rpy[0]) * Ry(rpy[1]) * Rx(rpy[2])  — XML stores Z,Y,X order
 	gp_Trsf trsf;
 	trsf.SetValues(
 		cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr, pos[0],

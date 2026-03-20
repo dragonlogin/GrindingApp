@@ -10,6 +10,7 @@
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QGridLayout>
 
 #include <AIS_Shape.hxx>
 #include <AIS_InteractiveContext.hxx>
@@ -29,6 +30,7 @@ MainWindow::MainWindow(QWidget* parent)
 	SetupToolBar();
 	SetupStatusBar();
 	SetupCentralWidget();
+	SetupJogPanel();
 }
 
 
@@ -98,6 +100,87 @@ void MainWindow::SetupCentralWidget()
 	setCentralWidget(viewer_);
 }
 
+void MainWindow::SetupJogPanel()
+{
+	auto dock = new QDockWidget(tr("Joint Jog"), this);
+	auto widget = new QWidget;
+	auto layout = new QGridLayout(widget);
+
+	const QString labels[6] = { "J1","J2","J3","J4","J5","J6" };
+
+	for (int i = 0; i < 6; ++i) {
+		layout->addWidget(new QLabel(labels[i]), i, 0);
+
+		auto* slider = new QSlider(Qt::Horizontal);
+		slider->setRange(-1800, 1800);   // ±180° × 10
+		slider->setValue(0);
+		joint_sliders_[i] = slider;
+		layout->addWidget(slider, i, 1);
+
+		auto* spin = new QDoubleSpinBox;
+		spin->setRange(-180.0, 180.0);
+		spin->setDecimals(1);
+		spin->setSuffix("°");
+		spin->setValue(0.0);
+		joint_spinboxes_[i] = spin;
+		layout->addWidget(spin, i, 2);
+
+		// 滑块 → spinbox
+		connect(slider, &QSlider::valueChanged, this, [this, i, spin](int v) {
+			spin->blockSignals(true);
+			spin->setValue(v / 10.0);
+			spin->blockSignals(false);
+			joint_angles_[i] = v / 10.0;
+			UpdateRobotDisplay();
+			});
+		// spinbox → 滑块
+		connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged),
+			this, [this, i, slider](double v) {
+				slider->blockSignals(true);
+				slider->setValue(qRound(v * 10));
+				slider->blockSignals(false);
+				joint_angles_[i] = v;
+				UpdateRobotDisplay();
+			});
+	}
+
+	dock->setWidget(widget);
+	addDockWidget(Qt::RightDockWidgetArea, dock);
+}
+
+void MainWindow::UpdateRobotDisplay()
+{
+	if (robot_meshes_.isEmpty()) return;
+
+	// 重算 FK（home offset + jog 角度）
+	QVector<gp_Trsf> fk(current_robot_.joints.size());
+	for (int i = 0; i < current_robot_.joints.size(); ++i) {
+		const RbJoint& j = current_robot_.joints[i];
+		double theta = j.offset_deg + (i < 6 ? joint_angles_[i] : 0.0);
+		gp_Trsf dh = DhTrsf(theta, j.d, j.a, j.alpha_deg);
+		fk[i] = (i == 0) ? dh : fk[i - 1];
+		if (i > 0) fk[i].Multiply(dh);
+	}
+
+	auto joint_idx = [&](const QString& name) -> int {
+		for (int i = 0; i < current_robot_.joints.size(); ++i)
+			if (current_robot_.joints[i].name == name) return i;
+		return -1;
+		};
+
+	for (auto& m : robot_meshes_) {
+		gp_Trsf local = RpyPosTrsf(m.drawable.rpy, m.drawable.pos);
+		int idx = joint_idx(m.drawable.ref_joint);
+		if (idx >= 0) {
+			gp_Trsf world = fk[idx];
+			world.Multiply(local);
+			local = world;
+		}
+		viewer_->Context()->SetLocation(m.ais, TopLoc_Location(local));
+	}
+	viewer_->Context()->UpdateCurrentViewer();
+}
+
 void MainWindow::OnLoadRobot()
 {
 	QString path = QFileDialog::getOpenFileName(
@@ -111,40 +194,27 @@ void MainWindow::OnLoadRobot()
 		<< "joints:" << robot.joints.size()
 		<< "drawables:" << robot.drawables.size();
 
-	for (auto& s : robot_shapes_)
-		viewer_->Context()->Remove(s, Standard_False);
-	robot_shapes_.clear();
+	for (auto& m : robot_meshes_)
+		viewer_->Context()->Remove(m.ais, Standard_False);
+	robot_meshes_.clear();
 
-	QVector<gp_Trsf> fk = ComputeFkHome(robot);
-
-	auto joint_index = [&](const QString& name) -> int {
-		for (int i = 0; i < robot.joints.size(); ++i)
-			if (robot.joints[i].name == name)
-				return i;
-		return -1;
-	};
+	current_robot_ = robot;
+	memset(joint_angles_, 0, sizeof(joint_angles_));
+	for (int i = 0; i < 6; ++i) {
+		if (joint_sliders_[i]) joint_sliders_[i]->setValue(0);
+		if (joint_spinboxes_[i]) joint_spinboxes_[i]->setValue(0.0);
+	}
 
 	for (const RbDrawable& drw : robot.drawables) {
 		TopoDS_Shape shape = StlLoader::Load(drw.mesh_file);
-		if (shape.IsNull()) {
-			qDebug() << " -" << drw.name << "(mesh not found)";
-			continue;
-		}
-		gp_Trsf mesh_trsf = RpyPosTrsf(drw.rpy, drw.pos);
-		int idx = joint_index(drw.ref_joint);
-		if (idx >= 0) {
-			gp_Trsf world = fk[idx];
-			world.Multiply(mesh_trsf);
-			mesh_trsf = world;
-		}
-		Handle(AIS_Shape) ais = new AIS_Shape(shape);
-		ais->SetLocalTransformation(mesh_trsf);
-		viewer_->Context()->Display(ais, AIS_Shaded, 0, Standard_False);
-		robot_shapes_.append(ais);
-		qDebug() << " -" << drw.name << "(ok)";
-	}
+		if (shape.IsNull()) { qDebug() << drw.name << "not found"; continue; }
 
+		Handle(AIS_Shape) ais = new AIS_Shape(shape);
+		viewer_->Context()->Display(ais, AIS_Shaded, 0, Standard_False);
+		robot_meshes_.append({ drw, shape, ais });
+	}
 	viewer_->Context()->UpdateCurrentViewer();
+	UpdateRobotDisplay();   // 应用 home 姿态
 	viewer_->View()->FitAll();
 }
 
