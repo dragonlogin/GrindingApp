@@ -41,8 +41,8 @@ set(Source
     src/RobotDisplay.cpp
 )
 
-#source_group("Header" FILES ${Header})
-source_group("Source" FILES ${Source})
+source_group("Header Files" FILES ${Header})
+#source_group("Source " FILES ${Source})
 
 set(TS_FILES translations/zh_CN.ts)
 

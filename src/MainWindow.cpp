@@ -11,15 +11,46 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGridLayout>
+#include <QTreeWidget>
+#include <QHeaderView>
+#include <QMenu>
 
 #include <AIS_Shape.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <V3d_View.hxx>
+#include <Geom_Axis2Placement.hxx>
+#include <AIS_Trihedron.hxx>
+
 
 #include "OcctViewWidget.h"
 #include "StepImporter.h"
 #include "StlLoader.h"
 #include "RobotDisplay.h"
+
+static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const QString& role) {
+	for (int i = 0; i < parent->childCount(); ++i) {
+		auto child = parent->child(i);
+		if (child->data(0, Qt::UserRole).toString() == role)
+			return child;
+
+		if (auto found = FindNode(child, role))
+			return found;
+	}
+
+	return nullptr;
+}
+
+static QTreeWidgetItem* FindNode(QTreeWidget* tree, const QString& role) {
+	for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+		auto item = tree->topLevelItem(i);
+		if (item->data(0, Qt::UserRole).toString() == role)
+			return item;
+
+		if (auto found = FindNode(item, role))
+			return found;
+	}
+	return nullptr;
+}
 
 MainWindow::MainWindow(QWidget* parent)
 	: QMainWindow(parent)
@@ -31,6 +62,7 @@ MainWindow::MainWindow(QWidget* parent)
 	SetupStatusBar();
 	SetupCentralWidget();
 	SetupJogPanel();
+	SetupSceneTree();
 }
 
 
@@ -178,7 +210,164 @@ void MainWindow::UpdateRobotDisplay()
 		}
 		viewer_->Context()->SetLocation(m.ais, TopLoc_Location(local));
 	}
+	UpdateCoordinateFrames(fk);
+	UpdateRobotJoints();
 	viewer_->Context()->UpdateCurrentViewer();
+}
+
+
+void MainWindow::SetupSceneTree()
+{
+	auto* dock = new QDockWidget(tr("Station Manager"), this);
+	scene_tree_ = new QTreeWidget;
+	scene_tree_->setColumnCount(2);
+	scene_tree_->setHeaderHidden(true);
+	scene_tree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+	scene_tree_->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+
+	auto* station = new QTreeWidgetItem({tr("Station-1"), ""});
+	station->setData(0, Qt::UserRole, "station");
+	scene_tree_->addTopLevelItem(station);
+	station->setExpanded(true);
+
+	scene_tree_->setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(scene_tree_, &QWidget::customContextMenuRequested,
+	        this, &MainWindow::OnSceneTreeContextMenu);
+
+	dock->setWidget(scene_tree_);
+	addDockWidget(Qt::LeftDockWidgetArea, dock);
+}
+
+void MainWindow::AddRobot(const QString& name)
+{
+	auto* station = FindNode(scene_tree_, "station");
+	if (!station) return;
+
+	auto* old = FindNode(scene_tree_, "robot");
+	if (old) delete old;
+
+	auto* robot = new QTreeWidgetItem({name, tr("Robot")});
+	robot->setData(0, Qt::UserRole, "robot");
+	station->insertChild(0, robot);
+	robot->setExpanded(true);
+
+	UpdateRobotJoints();
+}
+
+void MainWindow::UpdateRobotJoints()
+{
+	auto* robot = FindNode(scene_tree_, "robot");
+	if (!robot) return;
+
+	// 只删除 joint 类型子节点，保留 tool/workpiece 节点
+	for (int i = robot->childCount() - 1; i >= 0; --i) {
+		if (robot->child(i)->data(0, Qt::UserRole).toString() == "joint")
+			delete robot->takeChild(i);
+	}
+
+	int n = current_robot_.joints.size();
+	for (int i = 0; i < n; ++i) {
+		double angle = (i < 6) ? joint_angles_[i] : 0.0;
+		bool is_tcp = (i == n - 1);
+		QString display_name = is_tcp
+			? current_robot_.joints[i].name + tr(" (TCP)")
+			: current_robot_.joints[i].name;
+
+		auto* item = new QTreeWidgetItem(
+			{display_name, QString("%1°").arg(angle, 0, 'f', 1)});
+		item->setData(0, Qt::UserRole, "joint");
+		item->setData(0, Qt::UserRole + 1, i);  // 坐标系索引
+		robot->insertChild(i, item);
+	}
+}
+
+void MainWindow::AddTool(const QString& name, const QString& parent_role)
+{
+	// 1. 在 scene tree 中找到 parent_role 对应的节点
+	auto parent_node = FindNode(scene_tree_, parent_role);
+	if (!parent_node) 
+		return;
+	// 2. 在 parent_node 下添加 tool 节点
+	auto tool_node = new QTreeWidgetItem({ name, tr("Tool") });
+	tool_node->setData(0, Qt::UserRole, "tool");
+	parent_node->addChild(tool_node);
+	tool_node->setExpanded(true);
+	auto tcp = new QTreeWidgetItem({ name + ".TCP0", tr("Frame") });
+	tcp->setData(0, Qt::UserRole, "tcp");
+	tool_node->addChild(tcp);
+	tool_node->setExpanded(true);
+}
+
+void MainWindow::AddWorkpiece(const QString& name, const QString& parent_role)
+{
+	auto parent = FindNode(scene_tree_, parent_role);
+	if (!parent) return;
+
+	auto wp = new QTreeWidgetItem({ name, tr("Workpiece") });
+	wp->setData(0, Qt::UserRole, "workpiece");
+	parent->addChild(wp);
+}
+
+static Handle(AIS_Trihedron) MakeTrihedron(const gp_Trsf& trsf, double size)
+{
+	gp_Pnt origin(trsf.TranslationPart());
+	gp_Mat rot   = trsf.VectorialPart();
+	gp_Dir z_dir(rot.Column(3));
+	gp_Dir x_dir(rot.Column(1));
+	Handle(Geom_Axis2Placement) pl =
+		new Geom_Axis2Placement(gp_Ax2(origin, z_dir, x_dir));
+	Handle(AIS_Trihedron) tri = new AIS_Trihedron(pl);
+	tri->SetSize(size);
+	return tri;
+}
+
+void MainWindow::UpdateCoordinateFrames(const QVector<gp_Trsf>& fk)
+{
+	// 清除旧帧
+	if (!base_frame_.IsNull())
+		viewer_->Context()->Remove(base_frame_, Standard_False);
+	for (auto& t : joint_frames_)
+		viewer_->Context()->Remove(t, Standard_False);
+	joint_frames_.clear();
+
+	// Base 坐标系：世界原点，默认显示
+	base_frame_ = MakeTrihedron(gp_Trsf(), 80.0);
+	viewer_->Context()->Display(base_frame_, Standard_False);
+
+	int n = fk.size();
+	for (int i = 0; i < n; ++i) {
+		Handle(AIS_Trihedron) tri = MakeTrihedron(fk[i], 50.0);
+		viewer_->Context()->Display(tri, Standard_False);
+
+		// Joint1-5（非末端）默认隐藏；TCP（末端）默认显示
+		if (i < n - 1)
+			viewer_->Context()->Erase(tri, Standard_False);
+
+		joint_frames_.append(tri);
+	}
+}
+
+void MainWindow::OnSceneTreeContextMenu(const QPoint& pos)
+{
+	QTreeWidgetItem* item = scene_tree_->itemAt(pos);
+	if (!item) return;
+	if (item->data(0, Qt::UserRole).toString() != "joint") return;
+
+	int idx = item->data(0, Qt::UserRole + 1).toInt();
+	if (idx < 0 || idx >= joint_frames_.size()) return;
+
+	Handle(AIS_Trihedron) tri = joint_frames_[idx];
+	bool visible = viewer_->Context()->IsDisplayed(tri);
+
+	QMenu menu(this);
+	menu.addAction(visible ? tr("Hide Frame") : tr("Show Frame"),
+	               [this, tri, visible]() {
+		if (visible)
+			viewer_->Context()->Erase(tri, Standard_True);
+		else
+			viewer_->Context()->Display(tri, Standard_True);
+	});
+	menu.exec(scene_tree_->mapToGlobal(pos));
 }
 
 void MainWindow::OnLoadRobot()
@@ -213,6 +402,8 @@ void MainWindow::OnLoadRobot()
 		viewer_->Context()->Display(ais, AIS_Shaded, 0, Standard_False);
 		robot_meshes_.append({ drw, shape, ais });
 	}
+
+	AddRobot(current_robot_.name);
 	viewer_->Context()->UpdateCurrentViewer();
 	UpdateRobotDisplay();   // 应用 home 姿态
 	viewer_->View()->FitAll();

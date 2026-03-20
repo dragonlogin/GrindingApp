@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "GrindingApp (Debug)",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "build\\bin\\Debug\\GrindingApp.exe"],
+      "port": 0
+    },
+    {
+      "name": "Build (CMake)",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "build_app.bat"],
+      "port": 0
+    }
+  ]
+}

@@ -40,7 +40,7 @@ void OcctViewWidget::mousePressEvent(QMouseEvent* e)
 		view_->StartRotation(e->pos().x(), e->pos().y());
 	}
 
-	if (e->button() == Qt::LeftButton)
+	if (e->button() == Qt::MidButton)
 		panning_ = true;
 }
 
@@ -67,7 +67,7 @@ void OcctViewWidget::mouseReleaseEvent(QMouseEvent* e)
 {
 	if (e->button() == Qt::RightButton)
 		rotating_ = false;
-	if (e->button() == Qt::LeftButton)
+	if (e->button() == Qt::MidButton)
 		panning_ = false;
 
 	view_->Redraw();
