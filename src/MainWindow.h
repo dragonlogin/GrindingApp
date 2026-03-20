@@ -20,6 +20,9 @@ private slots:
 	void OnViewTop();
 	void OnViewSide();
 	void OnViewIsometric();
+	void OnViewWireframe();
+	void OnViewShaded();
+	void OnFitAll();
 private:
     // MainWindow.h 新增
     void SwitchLanguage(const QString& lang);

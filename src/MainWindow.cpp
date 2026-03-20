@@ -53,10 +53,10 @@ void MainWindow::SetupMenuBar()
 	viewMenu->addAction(tr("Side View"), this, &MainWindow::OnViewSide);
 	viewMenu->addAction(tr("Isometric"), this, &MainWindow::OnViewIsometric);
 	viewMenu->addSeparator();
-	viewMenu->addAction(tr("Wireframe"));
-	viewMenu->addAction(tr("Shaded"));
+	viewMenu->addAction(tr("Wireframe"), this, &MainWindow::OnViewWireframe);
+	viewMenu->addAction(tr("Shaded"), this, &MainWindow::OnViewShaded);
 	viewMenu->addSeparator();
-	viewMenu->addAction(tr("Fit All"));
+	viewMenu->addAction(tr("Fit All"), this, &MainWindow::OnFitAll);
 }
 
 void MainWindow::SetupToolBar()
@@ -70,9 +70,9 @@ void MainWindow::SetupToolBar()
 	tb->addAction(tr("Side View"), this, &MainWindow::OnViewSide);
 	tb->addAction(tr("Isometric"), this, &MainWindow::OnViewIsometric);
 	tb->addSeparator();
-	tb->addAction(tr("Wireframe"));
-	tb->addAction(tr("Shaded"));
-	tb->addAction(tr("Fit All"));
+	tb->addAction(tr("Wireframe"), this, &MainWindow::OnViewWireframe);
+	tb->addAction(tr("Shaded"), this, &MainWindow::OnViewShaded);
+	tb->addAction(tr("Fit All"), this, &MainWindow::OnFitAll);
 }
 
 void MainWindow::SetupStatusBar()
@@ -130,3 +130,17 @@ void MainWindow::OnViewIsometric()
 	viewer_->View()->FitAll(); 
 }
 
+void MainWindow::OnViewWireframe()
+{
+	viewer_->Context()->SetDisplayMode(AIS_WireFrame, Standard_True);
+}
+
+void MainWindow::OnViewShaded()
+{
+	viewer_->Context()->SetDisplayMode(AIS_Shaded, Standard_True);
+}
+
+void MainWindow::OnFitAll()
+{
+	viewer_->View()->FitAll();
+}
