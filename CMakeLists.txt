@@ -17,8 +17,7 @@ if(MSVC)
 endif()
 
 # 查找依赖
-find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL)
-find_package(Qt5LinguistTools REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL LinguistTools)
 find_package(OpenCASCADE REQUIRED)
 
 # 收集源文件
@@ -26,6 +25,8 @@ set(Header
     src/MainWindow.h
     src/OcctViewWidget.h
     src/StepImporter.h
+    src/UrdfParser.h
+    src/StlLoader.h
 )
 
 set(Source
@@ -33,9 +34,11 @@ set(Source
     src/MainWindow.cpp
     src/OcctViewWidget.cpp
     src/StepImporter.cpp
+    src/UrdfParser.cpp
+    src/StlLoader.cpp
 )
 
-source_group("Header" FILES ${Header})
+#source_group("Header" FILES ${Header})
 source_group("Source" FILES ${Source})
 
 set(TS_FILES translations/zh_CN.ts)
@@ -55,7 +58,7 @@ add_executable(GrindingApp
 
 target_include_directories(GrindingApp PRIVATE
     src
-    ${OpenCASCADE_INCLUDE_DIR}
+    $<BUILD_INTERFACE:${OpenCASCADE_INCLUDE_DIR}>
 )
 
 target_link_libraries(GrindingApp PRIVATE
@@ -104,7 +107,8 @@ target_link_libraries(GrindingApp PRIVATE
     #TKSTEP209
     #TKSTEPAttr
     #TKSTEPBase
-    TKXSBase
+    #TKXSBase
+    TKDESTL
 )
 
 # 设置输出目录

@@ -71,5 +71,17 @@
         <source>File: %1 | Face: %2</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Load Robot(&amp;R)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open URDF File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>URDF Files (*.urdf)</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

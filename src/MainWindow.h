@@ -23,6 +23,8 @@ private slots:
 	void OnViewWireframe();
 	void OnViewShaded();
 	void OnFitAll();
+
+    void OnLoadRobot();
 private:
     // MainWindow.h 新增
     void SwitchLanguage(const QString& lang);

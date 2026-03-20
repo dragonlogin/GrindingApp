@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 
+#include <QDebug>
 #include <QMenuBar>
 #include <QToolBar>
 #include <QStatusBar>
@@ -16,6 +17,8 @@
 
 #include "OcctViewWidget.h"
 #include "StepImporter.h"
+#include "UrdfParser.h"
+#include "StlLoader.h"
 
 MainWindow::MainWindow(QWidget* parent)
 	: QMainWindow(parent)
@@ -41,7 +44,11 @@ void MainWindow::SwitchLanguage(const QString& lang)
 void MainWindow::SetupMenuBar()
 {
 	// ÎÄ¼þ²Ëµ¥
+
 	QMenu* fileMenu = menuBar()->addMenu(tr("File(&F)"));
+	fileMenu->addAction(tr("Load Robot(&R)"), this, &MainWindow::OnLoadRobot,
+		QKeySequence("Ctrl+R"));
+
 	fileMenu->addAction(tr("Import Workpiece(&I)"), this, &MainWindow::OnImportWorkpiece, QKeySequence("Ctrl+O"));
 	fileMenu->addSeparator();
 	fileMenu->addAction(tr("Exit(&Q)"), qApp, &QApplication::quit,
@@ -90,6 +97,25 @@ void MainWindow::SetupCentralWidget()
 	viewer_ = new OcctViewWidget(this);
 	setCentralWidget(viewer_);
 }
+
+void MainWindow::OnLoadRobot()
+{
+	QString path = QFileDialog::getOpenFileName(
+		this, tr("Open URDF File"), "", tr("URDF Files (*.urdf)"));
+	if (path.isEmpty())
+		return;
+
+	QVector<UrdfLink> links = UrdfParser::Parse(path);
+	qDebug() << "Robot links:" << links.size();
+	for (const UrdfLink& link : links) {
+		TopoDS_Shape shape = link.mesh_path.isEmpty()
+			? TopoDS_Shape()
+			: StlLoader::Load(link.mesh_path);
+		qDebug() << " -" << link.name
+			<< (shape.IsNull() ? "(no mesh)" : "(mesh OK)");
+	}
+}
+
 
 void MainWindow::OnImportWorkpiece()
 {
