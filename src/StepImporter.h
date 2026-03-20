@@ -6,6 +6,6 @@
 class StepImporter
 {
 public:
-	// 读取 STEP 文件并三角化，返回形状；faceCount 可为 nullptr
+	// 璇诲彇 STEP 鏂囦欢骞朵笁瑙掑寲锛岃繑鍥炲舰鐘讹紱faceCount 鍙负 nullptr
 	static TopoDS_Shape Load(const QString& file_path, int* face_count = nullptr);
 };

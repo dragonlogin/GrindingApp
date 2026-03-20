@@ -12,12 +12,13 @@ set(CMAKE_AUTOUIC ON)
 
 # Windows MSVC 编译选项
 if(MSVC)
-    #add_compile_options(/utf-8 /W3)
     add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
+    add_compile_options(/utf-8 /nologo)
 endif()
 
 # 查找依赖
-find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL LinguistTools)
+find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL Xml)
+find_package(Qt5 OPTIONAL_COMPONENTS LinguistTools)
 find_package(OpenCASCADE REQUIRED)
 
 # 收集源文件
@@ -25,8 +26,9 @@ set(Header
     src/MainWindow.h
     src/OcctViewWidget.h
     src/StepImporter.h
-    src/UrdfParser.h
     src/StlLoader.h
+    src/RbXmlParser.h
+    src/RobotDisplay.h
 )
 
 set(Source
@@ -34,8 +36,9 @@ set(Source
     src/MainWindow.cpp
     src/OcctViewWidget.cpp
     src/StepImporter.cpp
-    src/UrdfParser.cpp
     src/StlLoader.cpp
+    src/RbXmlParser.cpp
+    src/RobotDisplay.cpp
 )
 
 #source_group("Header" FILES ${Header})
@@ -43,15 +46,16 @@ source_group("Source" FILES ${Source})
 
 set(TS_FILES translations/zh_CN.ts)
 
-# 生成/更新 .ts 文件
-qt5_create_translation(QM_FILES 
-    ${Header}
-    ${Source}
-    ${TS_FILES}
-)
+# 生成/更新 .ts 文件（需要 LinguistTools）
+if(Qt5LinguistTools_FOUND)
+    qt5_create_translation(QM_FILES
+        ${Header}
+        ${Source}
+        ${TS_FILES}
+    )
+endif()
 
-
-add_executable(GrindingApp 
+add_executable(GrindingApp
     ${QM_FILES}
     ${Source}
 )
@@ -66,6 +70,7 @@ target_link_libraries(GrindingApp PRIVATE
     Qt5::Gui
     Qt5::Widgets
     Qt5::OpenGL
+    Qt5::Xml
 
      # 核心数学和几何库
     TKernel

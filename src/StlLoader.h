@@ -5,6 +5,6 @@
 
 class StlLoader {
 public:
-	// ·µ»Ø Null shape ±íÊ¾Ê§°Ü
+	// è¿”å›ž Null shape è¡¨ç¤ºå¤±è´¥
 	static TopoDS_Shape Load(const QString& stl_path);
 };

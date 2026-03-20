@@ -1,0 +1,1 @@
+{"MagicCode":"HyperBrain Robot","Name":"IRB140","Configuration":"Pieper","Image":"IRB140_fig.bmp","RWFile":"IRB140.rb.xml","Controller": "ABBIRB","Weight":0,"Payload":6,"JobSpace":0.81}

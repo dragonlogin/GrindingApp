@@ -23,10 +23,10 @@ TopoDS_Shape StepImporter::Load(const QString& file_path, int* face_count)
 	reader.TransferRoots();
 	TopoDS_Shape shape = reader.OneShape();
 
-	// Èı½Ç»¯£¨ÏßĞÔÆ«²î 0.1 mm£©
+	// ä¸‰è§’åŒ–ï¼ˆçº¿æ€§åå·® 0.1 mmï¼‰
 	BRepMesh_IncrementalMesh(shape, 0.1);
 
-	// Í³¼ÆÃæÊı
+	// ç»Ÿè®¡é¢æ•°
 	int count = 0;
 	for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next())
 		++count;

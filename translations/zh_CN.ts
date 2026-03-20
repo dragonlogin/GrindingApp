@@ -76,11 +76,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Open URDF File</source>
+        <source>Open Robot File</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>URDF Files (*.urdf)</source>
+        <source>Robot Files (*.urdf *.xml)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

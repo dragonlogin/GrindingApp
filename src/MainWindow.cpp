@@ -17,8 +17,8 @@
 
 #include "OcctViewWidget.h"
 #include "StepImporter.h"
-#include "UrdfParser.h"
 #include "StlLoader.h"
+#include "RobotDisplay.h"
 
 MainWindow::MainWindow(QWidget* parent)
 	: QMainWindow(parent)
@@ -43,7 +43,7 @@ void MainWindow::SwitchLanguage(const QString& lang)
 
 void MainWindow::SetupMenuBar()
 {
-	// 文件菜单
+	// 鏂囦欢鑿滃崟
 
 	QMenu* fileMenu = menuBar()->addMenu(tr("File(&F)"));
 	fileMenu->addAction(tr("Load Robot(&R)"), this, &MainWindow::OnLoadRobot,
@@ -54,7 +54,7 @@ void MainWindow::SetupMenuBar()
 	fileMenu->addAction(tr("Exit(&Q)"), qApp, &QApplication::quit,
 		QKeySequence("Ctrl+Q"));
 
-	// 视图菜单
+	// 瑙嗗浘鑿滃崟
 	QMenu* viewMenu = menuBar()->addMenu(tr("View(&V)"));
 	viewMenu->addAction(tr("Front View"), this, &MainWindow::OnViewFront);
 	viewMenu->addAction(tr("Top View"), this, &MainWindow::OnViewTop);
@@ -69,7 +69,7 @@ void MainWindow::SetupMenuBar()
 
 void MainWindow::SetupToolBar()
 {
-	QToolBar* tb = addToolBar("主工具栏");
+	QToolBar* tb = addToolBar("涓诲伐鍏锋爮");
 	tb->setMovable(false);
 	tb->addAction(tr("Import Workpiece"), this, &MainWindow::OnImportWorkpiece);
 	tb->addSeparator();
@@ -101,19 +101,51 @@ void MainWindow::SetupCentralWidget()
 void MainWindow::OnLoadRobot()
 {
 	QString path = QFileDialog::getOpenFileName(
-		this, tr("Open URDF File"), "", tr("URDF Files (*.urdf)"));
+		this, tr("Open Robot File"), "",
+		tr("Robot Files (*.xml)"));
 	if (path.isEmpty())
 		return;
 
-	QVector<UrdfLink> links = UrdfParser::Parse(path);
-	qDebug() << "Robot links:" << links.size();
-	for (const UrdfLink& link : links) {
-		TopoDS_Shape shape = link.mesh_path.isEmpty()
-			? TopoDS_Shape()
-			: StlLoader::Load(link.mesh_path);
-		qDebug() << " -" << link.name
-			<< (shape.IsNull() ? "(no mesh)" : "(mesh OK)");
+	RbRobot robot = RbXmlParser::Parse(path);
+	qDebug() << "Robot:" << robot.name
+		<< "joints:" << robot.joints.size()
+		<< "drawables:" << robot.drawables.size();
+
+	for (auto& s : robot_shapes_)
+		viewer_->Context()->Remove(s, Standard_False);
+	robot_shapes_.clear();
+
+	QVector<gp_Trsf> fk = ComputeFkHome(robot);
+
+	auto joint_index = [&](const QString& name) -> int {
+		for (int i = 0; i < robot.joints.size(); ++i)
+			if (robot.joints[i].name == name)
+				return i;
+		return -1;
+	};
+
+	for (const RbDrawable& drw : robot.drawables) {
+		TopoDS_Shape shape = StlLoader::Load(drw.mesh_file);
+		if (shape.IsNull()) {
+			qDebug() << " -" << drw.name << "(mesh not found)";
+			continue;
+		}
+		gp_Trsf mesh_trsf = RpyPosTrsf(drw.rpy, drw.pos);
+		int idx = joint_index(drw.ref_joint);
+		if (idx >= 0) {
+			gp_Trsf world = fk[idx];
+			world.Multiply(mesh_trsf);
+			mesh_trsf = world;
+		}
+		Handle(AIS_Shape) ais = new AIS_Shape(shape);
+		ais->SetLocalTransformation(mesh_trsf);
+		viewer_->Context()->Display(ais, AIS_Shaded, 0, Standard_False);
+		robot_shapes_.append(ais);
+		qDebug() << " -" << drw.name << "(ok)";
 	}
+
+	viewer_->Context()->UpdateCurrentViewer();
+	viewer_->View()->FitAll();
 }
 
 

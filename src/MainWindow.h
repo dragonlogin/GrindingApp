@@ -2,7 +2,11 @@
 
 #include <QMainWindow>
 #include <QLabel>
+#include <QVector>
 
+#include <AIS_Shape.hxx>
+
+#include "RbXmlParser.h"
 
 class OcctViewWidget;
 
@@ -37,4 +41,6 @@ private:
     QLabel* model_info_;   // 状态栏：模型信息
     QLabel* coord_label_;  // 状态栏：坐标显示
     OcctViewWidget* viewer_ = nullptr;
+
+    QVector<Handle(AIS_Shape)> robot_shapes_;
 };
