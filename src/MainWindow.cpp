@@ -14,6 +14,9 @@
 #include <QTreeWidget>
 #include <QHeaderView>
 #include <QMenu>
+#include <QDomDocument>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include <AIS_Shape.hxx>
 #include <AIS_InteractiveContext.hxx>
@@ -26,6 +29,13 @@
 #include "StepImporter.h"
 #include "StlLoader.h"
 #include "RobotDisplay.h"
+
+static void parseXyz(const QString& s, double out[3])
+{
+	auto p = s.split(' ', Qt::SkipEmptyParts);
+	if (p.size() == 3)
+		for (int i = 0; i < 3; ++i) out[i] = p[i].toDouble();
+}
 
 static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const QString& role) {
 	for (int i = 0; i < parent->childCount(); ++i) {
@@ -50,6 +60,19 @@ static QTreeWidgetItem* FindNode(QTreeWidget* tree, const QString& role) {
 			return found;
 	}
 	return nullptr;
+}
+
+static Handle(AIS_Trihedron) MakeTrihedron(const gp_Trsf& trsf, double size)
+{
+	gp_Pnt origin(trsf.TranslationPart());
+	gp_Mat rot = trsf.VectorialPart();
+	gp_Dir z_dir(rot.Column(3));
+	gp_Dir x_dir(rot.Column(1));
+	Handle(Geom_Axis2Placement) pl =
+		new Geom_Axis2Placement(gp_Ax2(origin, z_dir, x_dir));
+	Handle(AIS_Trihedron) tri = new AIS_Trihedron(pl);
+	tri->SetSize(size);
+	return tri;
 }
 
 MainWindow::MainWindow(QWidget* parent)
@@ -82,6 +105,9 @@ void MainWindow::SetupMenuBar()
 	QMenu* fileMenu = menuBar()->addMenu(tr("File(&F)"));
 	fileMenu->addAction(tr("Load Robot(&R)"), this, &MainWindow::OnLoadRobot,
 		QKeySequence("Ctrl+R"));
+
+	fileMenu->addAction(tr("Load Tool(&T)"), this, &MainWindow::OnLoadTool,
+		QKeySequence("Ctrl+T"));
 
 	fileMenu->addAction(tr("Import Workpiece(&I)"), this, &MainWindow::OnImportWorkpiece, QKeySequence("Ctrl+O"));
 	fileMenu->addSeparator();
@@ -212,6 +238,21 @@ void MainWindow::UpdateRobotDisplay()
 	}
 	UpdateCoordinateFrames(fk);
 	UpdateRobotJoints();
+
+	// 更新工具位置（挂在 Joint6 / TCP 上）
+if (!tool_ais_.IsNull() && !fk.isEmpty()) {
+    gp_Trsf tool_world = fk.last();
+    tool_world.Multiply(tool_base_trsf_);
+    viewer_->Context()->SetLocation(tool_ais_, TopLoc_Location(tool_world));
+
+    // TCP0 坐标系（重建）
+    if (!tool_tcp_frame_.IsNull())
+        viewer_->Context()->Remove(tool_tcp_frame_, Standard_False);
+    gp_Trsf tcp_world = fk.last();
+    tcp_world.Multiply(tool_tcp_trsf_);
+    tool_tcp_frame_ = MakeTrihedron(tcp_world, 40.0);
+    viewer_->Context()->Display(tool_tcp_frame_, Standard_False);
+}
 	viewer_->Context()->UpdateCurrentViewer();
 }
 
@@ -308,18 +349,7 @@ void MainWindow::AddWorkpiece(const QString& name, const QString& parent_role)
 	parent->addChild(wp);
 }
 
-static Handle(AIS_Trihedron) MakeTrihedron(const gp_Trsf& trsf, double size)
-{
-	gp_Pnt origin(trsf.TranslationPart());
-	gp_Mat rot   = trsf.VectorialPart();
-	gp_Dir z_dir(rot.Column(3));
-	gp_Dir x_dir(rot.Column(1));
-	Handle(Geom_Axis2Placement) pl =
-		new Geom_Axis2Placement(gp_Ax2(origin, z_dir, x_dir));
-	Handle(AIS_Trihedron) tri = new AIS_Trihedron(pl);
-	tri->SetSize(size);
-	return tri;
-}
+
 
 void MainWindow::UpdateCoordinateFrames(const QVector<gp_Trsf>& fk)
 {
@@ -409,6 +439,77 @@ void MainWindow::OnLoadRobot()
 	viewer_->View()->FitAll();
 }
 
+
+void MainWindow::OnLoadTool()
+{
+	QString path = QFileDialog::getOpenFileName(
+		this, tr("Load Tool"), "",
+		tr("Tool Files (*.tool *.xml)"));
+	if (path.isEmpty()) return;
+
+	// 支持 .tool（JSON → RWFile）或直接 .xml
+	QString xml_path = path;
+	if (path.endsWith(".tool", Qt::CaseInsensitive)) {
+		QFile f(path); f.open(QIODevice::ReadOnly);
+		QJsonDocument jdoc = QJsonDocument::fromJson(f.readAll());
+		QString rw = jdoc.object().value("RWFile").toString();
+		xml_path = QFileInfo(path).absoluteDir().filePath(rw);
+	}
+
+
+	QString base_dir = QFileInfo(xml_path).absoluteDir().absolutePath();
+	// 解析 XML
+	QFile xf(xml_path); xf.open(QIODevice::ReadOnly);
+	QDomDocument doc; doc.setContent(&xf);
+	QDomElement root = doc.documentElement();   // <TreeDevice>
+
+	// 1. STL 路径
+	QString stl_rel = root.elementsByTagName("Polytope").at(0)
+		.toElement().attribute("file");
+	QString stl_path = QDir(base_dir).filePath(stl_rel);
+
+	// 2. Tool_Base 偏移（通常为 0）
+	QDomElement base_frame = root.elementsByTagName("Frame").at(0).toElement();
+	double base_pos[3] = {}, base_rpy[3] = {};
+	parseXyz(base_frame.firstChildElement("Pos").text(), base_pos);
+	parseXyz(base_frame.firstChildElement("RPY").text(), base_rpy);
+	tool_base_trsf_ = RpyPosTrsf(base_rpy, base_pos);
+
+	// 3. TCP0 偏移（在 SerialChain/Frame type=EndEffector）
+	double tcp_pos[3] = {}, tcp_rpy[3] = {};
+	QDomNodeList frames = root.elementsByTagName("Frame");
+	for (int i = 0; i < frames.count(); ++i) {
+		QDomElement fe = frames.at(i).toElement();
+		if (fe.attribute("type") == "EndEffector") {
+			parseXyz(fe.firstChildElement("Pos").text(), tcp_pos);
+			parseXyz(fe.firstChildElement("RPY").text(), tcp_rpy);
+			break;
+		}
+	}
+	tool_tcp_trsf_ = RpyPosTrsf(tcp_rpy, tcp_pos);
+
+	// 加载 STL
+	TopoDS_Shape shape = StlLoader::Load(stl_path);
+	if (shape.IsNull()) {
+		qDebug() << "Tool STL not found:" << stl_path;
+		return;
+	}
+
+	// 清除旧工具
+	if (!tool_ais_.IsNull())
+		viewer_->Context()->Remove(tool_ais_, Standard_False);
+	if (!tool_tcp_frame_.IsNull())
+		viewer_->Context()->Remove(tool_tcp_frame_, Standard_False);
+
+	tool_ais_ = new AIS_Shape(shape);
+	viewer_->Context()->Display(tool_ais_, AIS_Shaded, 0, Standard_False);
+
+	QString tool_name = QFileInfo(xml_path).baseName();
+	AddTool(tool_name, "robot");
+
+	viewer_->Context()->UpdateCurrentViewer();
+	UpdateRobotDisplay();   // 立即应用当前 FK 位置
+}
 
 void MainWindow::OnImportWorkpiece()
 {

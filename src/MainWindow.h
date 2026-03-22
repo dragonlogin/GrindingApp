@@ -34,6 +34,7 @@ private slots:
 	void OnViewShaded();
 	void OnFitAll();
 	void OnLoadRobot();
+	void OnLoadTool();
 	void OnSceneTreeContextMenu(const QPoint& pos);
 private:
     // MainWindow.h 新增
@@ -76,4 +77,10 @@ private:
 	QTreeWidget*                    scene_tree_   = nullptr;
 	QVector<Handle(AIS_Trihedron)>  joint_frames_;  // index = joint index
 	Handle(AIS_Trihedron)           base_frame_;    // robot base (always visible)
+
+	// 工具状态
+	Handle(AIS_Shape)     tool_ais_;
+	Handle(AIS_Trihedron) tool_tcp_frame_;
+	gp_Trsf               tool_base_trsf_;  // 工具 mesh 相对法兰的偏移
+	gp_Trsf               tool_tcp_trsf_;   // TCP0 相对法兰的偏移
 };
