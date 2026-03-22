@@ -1,1 +1,6 @@
 build/
+.vs/
+.vscode/
+build_out.txt
+rebuild_out.txt
+.claude/settings.local.json
