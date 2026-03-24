@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "dependencies": [
     "qt5-base",
-    "opencascade"
+    "opencascade",
+    "orocos-kdl"
   ]
 }

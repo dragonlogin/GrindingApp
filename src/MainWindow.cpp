@@ -24,547 +24,512 @@
 #include <Geom_Axis2Placement.hxx>
 #include <AIS_Trihedron.hxx>
 
-
 #include "OcctViewWidget.h"
 #include "StepImporter.h"
 #include "StlLoader.h"
 #include "RobotDisplay.h"
+#include "RobotKinematics.h"
 
 static void parseXyz(const QString& s, double out[3])
 {
-	auto p = s.split(' ', Qt::SkipEmptyParts);
-	if (p.size() == 3)
-		for (int i = 0; i < 3; ++i) out[i] = p[i].toDouble();
+    auto p = s.split(' ', Qt::SkipEmptyParts);
+    if (p.size() == 3)
+        for (int i = 0; i < 3; ++i) out[i] = p[i].toDouble();
 }
 
-static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const QString& role) {
-	for (int i = 0; i < parent->childCount(); ++i) {
-		auto child = parent->child(i);
-		if (child->data(0, Qt::UserRole).toString() == role)
-			return child;
-
-		if (auto found = FindNode(child, role))
-			return found;
-	}
-
-	return nullptr;
+static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const QString& role)
+{
+    for (int i = 0; i < parent->childCount(); ++i) {
+        auto child = parent->child(i);
+        if (child->data(0, Qt::UserRole).toString() == role)
+            return child;
+        if (auto found = FindNode(child, role))
+            return found;
+    }
+    return nullptr;
 }
 
-static QTreeWidgetItem* FindNode(QTreeWidget* tree, const QString& role) {
-	for (int i = 0; i < tree->topLevelItemCount(); ++i) {
-		auto item = tree->topLevelItem(i);
-		if (item->data(0, Qt::UserRole).toString() == role)
-			return item;
-
-		if (auto found = FindNode(item, role))
-			return found;
-	}
-	return nullptr;
+static QTreeWidgetItem* FindNode(QTreeWidget* tree, const QString& role)
+{
+    for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+        auto item = tree->topLevelItem(i);
+        if (item->data(0, Qt::UserRole).toString() == role)
+            return item;
+        if (auto found = FindNode(item, role))
+            return found;
+    }
+    return nullptr;
 }
 
 static Handle(AIS_Trihedron) MakeTrihedron(const gp_Trsf& trsf, double size)
 {
-	gp_Pnt origin(trsf.TranslationPart());
-	gp_Mat rot = trsf.VectorialPart();
-	gp_Dir z_dir(rot.Column(3));
-	gp_Dir x_dir(rot.Column(1));
-	Handle(Geom_Axis2Placement) pl =
-		new Geom_Axis2Placement(gp_Ax2(origin, z_dir, x_dir));
-	Handle(AIS_Trihedron) tri = new AIS_Trihedron(pl);
-	tri->SetSize(size);
-	return tri;
+    gp_Pnt origin(trsf.TranslationPart());
+    gp_Mat rot = trsf.VectorialPart();
+    gp_Dir z_dir(rot.Column(3));
+    gp_Dir x_dir(rot.Column(1));
+    Handle(Geom_Axis2Placement) pl =
+        new Geom_Axis2Placement(gp_Ax2(origin, z_dir, x_dir));
+    Handle(AIS_Trihedron) tri = new AIS_Trihedron(pl);
+    tri->SetSize(size);
+    return tri;
 }
 
 MainWindow::MainWindow(QWidget* parent)
-	: QMainWindow(parent)
+    : QMainWindow(parent)
 {
-	setWindowTitle("GrindingApp");
+    setWindowTitle("GrindingApp");
 
-	SetupMenuBar();
-	SetupToolBar();
-	SetupStatusBar();
-	SetupCentralWidget();
-	SetupJogPanel();
-	SetupSceneTree();
+    SetupMenuBar();
+    SetupToolBar();
+    SetupStatusBar();
+    SetupCentralWidget();
+    SetupJogPanel();
+    SetupSceneTree();
 }
-
-
 
 void MainWindow::SwitchLanguage(const QString& lang)
 {
-	QSettings settings("GrindingApp", "GrindingApp");
-	settings.setValue("language", lang);
-	QMessageBox::information(this, tr("Language"),
-		tr("Language changed. Please restart the application."));
+    QSettings settings("GrindingApp", "GrindingApp");
+    settings.setValue("language", lang);
+    QMessageBox::information(this, tr("Language"),
+        tr("Language changed. Please restart the application."));
 }
 
 void MainWindow::SetupMenuBar()
 {
-	// 文件菜单
+    QMenu* fileMenu = menuBar()->addMenu(tr("File(&F)"));
+    fileMenu->addAction(tr("Load Robot(&R)"), this, &MainWindow::OnLoadRobot,
+        QKeySequence("Ctrl+R"));
+    fileMenu->addAction(tr("Load Tool(&T)"), this, &MainWindow::OnLoadTool,
+        QKeySequence("Ctrl+T"));
+    fileMenu->addAction(tr("Import Workpiece(&I)"), this,
+        &MainWindow::OnImportWorkpiece, QKeySequence("Ctrl+O"));
+    fileMenu->addSeparator();
+    fileMenu->addAction(tr("Exit(&Q)"), qApp, &QApplication::quit,
+        QKeySequence("Ctrl+Q"));
 
-	QMenu* fileMenu = menuBar()->addMenu(tr("File(&F)"));
-	fileMenu->addAction(tr("Load Robot(&R)"), this, &MainWindow::OnLoadRobot,
-		QKeySequence("Ctrl+R"));
-
-	fileMenu->addAction(tr("Load Tool(&T)"), this, &MainWindow::OnLoadTool,
-		QKeySequence("Ctrl+T"));
-
-	fileMenu->addAction(tr("Import Workpiece(&I)"), this, &MainWindow::OnImportWorkpiece, QKeySequence("Ctrl+O"));
-	fileMenu->addSeparator();
-	fileMenu->addAction(tr("Exit(&Q)"), qApp, &QApplication::quit,
-		QKeySequence("Ctrl+Q"));
-
-	// 视图菜单
-	QMenu* viewMenu = menuBar()->addMenu(tr("View(&V)"));
-	viewMenu->addAction(tr("Front View"), this, &MainWindow::OnViewFront);
-	viewMenu->addAction(tr("Top View"), this, &MainWindow::OnViewTop);
-	viewMenu->addAction(tr("Side View"), this, &MainWindow::OnViewSide);
-	viewMenu->addAction(tr("Isometric"), this, &MainWindow::OnViewIsometric);
-	viewMenu->addSeparator();
-	viewMenu->addAction(tr("Wireframe"), this, &MainWindow::OnViewWireframe);
-	viewMenu->addAction(tr("Shaded"), this, &MainWindow::OnViewShaded);
-	viewMenu->addSeparator();
-	viewMenu->addAction(tr("Fit All"), this, &MainWindow::OnFitAll);
+    QMenu* viewMenu = menuBar()->addMenu(tr("View(&V)"));
+    viewMenu->addAction(tr("Front View"), this, &MainWindow::OnViewFront);
+    viewMenu->addAction(tr("Top View"),   this, &MainWindow::OnViewTop);
+    viewMenu->addAction(tr("Side View"),  this, &MainWindow::OnViewSide);
+    viewMenu->addAction(tr("Isometric"),  this, &MainWindow::OnViewIsometric);
+    viewMenu->addSeparator();
+    viewMenu->addAction(tr("Wireframe"), this, &MainWindow::OnViewWireframe);
+    viewMenu->addAction(tr("Shaded"),    this, &MainWindow::OnViewShaded);
+    viewMenu->addSeparator();
+    viewMenu->addAction(tr("Fit All"), this, &MainWindow::OnFitAll);
 }
 
 void MainWindow::SetupToolBar()
 {
-	QToolBar* tb = addToolBar("主工具栏");
-	tb->setMovable(false);
-	tb->addAction(tr("Import Workpiece"), this, &MainWindow::OnImportWorkpiece);
-	tb->addSeparator();
-	tb->addAction(tr("Front View"), this, &MainWindow::OnViewFront);
-	tb->addAction(tr("Top View"), this, &MainWindow::OnViewTop);
-	tb->addAction(tr("Side View"), this, &MainWindow::OnViewSide);
-	tb->addAction(tr("Isometric"), this, &MainWindow::OnViewIsometric);
-	tb->addSeparator();
-	tb->addAction(tr("Wireframe"), this, &MainWindow::OnViewWireframe);
-	tb->addAction(tr("Shaded"), this, &MainWindow::OnViewShaded);
-	tb->addAction(tr("Fit All"), this, &MainWindow::OnFitAll);
+    QToolBar* tb = addToolBar(tr("Main Toolbar"));
+    tb->setMovable(false);
+    tb->addAction(tr("Import Workpiece"), this, &MainWindow::OnImportWorkpiece);
+    tb->addSeparator();
+    tb->addAction(tr("Front View"), this, &MainWindow::OnViewFront);
+    tb->addAction(tr("Top View"),   this, &MainWindow::OnViewTop);
+    tb->addAction(tr("Side View"),  this, &MainWindow::OnViewSide);
+    tb->addAction(tr("Isometric"),  this, &MainWindow::OnViewIsometric);
+    tb->addSeparator();
+    tb->addAction(tr("Wireframe"), this, &MainWindow::OnViewWireframe);
+    tb->addAction(tr("Shaded"),    this, &MainWindow::OnViewShaded);
+    tb->addAction(tr("Fit All"),   this, &MainWindow::OnFitAll);
 }
 
 void MainWindow::SetupStatusBar()
 {
-	model_info_ = new QLabel("No model loaded");
-	coord_label_ = new QLabel("X: - Y: - Z: -");
+    model_info_  = new QLabel(tr("No model loaded"));
+    coord_label_ = new QLabel("X: - Y: - Z: -");
 
-	statusBar()->addWidget(model_info_, 1);
-	statusBar()->addPermanentWidget(coord_label_);
+    statusBar()->addWidget(model_info_, 1);
+    statusBar()->addPermanentWidget(coord_label_);
 }
 
 void MainWindow::SetupCentralWidget()
 {
-	viewer_ = new OcctViewWidget(this);
-	setCentralWidget(viewer_);
+    viewer_ = new OcctViewWidget(this);
+    setCentralWidget(viewer_);
 }
 
 void MainWindow::SetupJogPanel()
 {
-	auto dock = new QDockWidget(tr("Joint Jog"), this);
-	auto widget = new QWidget;
-	auto layout = new QGridLayout(widget);
+    auto dock   = new QDockWidget(tr("Joint Jog"), this);
+    auto widget = new QWidget;
+    auto layout = new QGridLayout(widget);
 
-	const QString labels[6] = { "J1","J2","J3","J4","J5","J6" };
+    const QString labels[6] = {"J1", "J2", "J3", "J4", "J5", "J6"};
 
-	for (int i = 0; i < 6; ++i) {
-		layout->addWidget(new QLabel(labels[i]), i, 0);
+    for (int i = 0; i < 6; ++i) {
+        layout->addWidget(new QLabel(labels[i]), i, 0);
 
-		auto* slider = new QSlider(Qt::Horizontal);
-		slider->setRange(-1800, 1800);   // ±180° × 10
-		slider->setValue(0);
-		joint_sliders_[i] = slider;
-		layout->addWidget(slider, i, 1);
+        auto* slider = new QSlider(Qt::Horizontal);
+        slider->setRange(-1800, 1800);  // ±180° × 10
+        slider->setValue(0);
+        joint_sliders_[i] = slider;
+        layout->addWidget(slider, i, 1);
 
-		auto* spin = new QDoubleSpinBox;
-		spin->setRange(-180.0, 180.0);
-		spin->setDecimals(1);
-		spin->setSuffix("°");
-		spin->setValue(0.0);
-		joint_spinboxes_[i] = spin;
-		layout->addWidget(spin, i, 2);
+        auto* spin = new QDoubleSpinBox;
+        spin->setRange(-180.0, 180.0);
+        spin->setDecimals(1);
+        spin->setSuffix("°");
+        spin->setValue(0.0);
+        joint_spinboxes_[i] = spin;
+        layout->addWidget(spin, i, 2);
 
-		// 滑块 → spinbox
-		connect(slider, &QSlider::valueChanged, this, [this, i, spin](int v) {
-			spin->blockSignals(true);
-			spin->setValue(v / 10.0);
-			spin->blockSignals(false);
-			joint_angles_[i] = v / 10.0;
-			UpdateRobotDisplay();
-			});
-		// spinbox → 滑块
-		connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged),
-			this, [this, i, slider](double v) {
-				slider->blockSignals(true);
-				slider->setValue(qRound(v * 10));
-				slider->blockSignals(false);
-				joint_angles_[i] = v;
-				UpdateRobotDisplay();
-			});
-	}
+        connect(slider, &QSlider::valueChanged, this, [this, i, spin](int v) {
+            spin->blockSignals(true);
+            spin->setValue(v / 10.0);
+            spin->blockSignals(false);
+            joint_angles_[i] = v / 10.0;
+            UpdateRobotDisplay();
+        });
+        connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged),
+            this, [this, i, slider](double v) {
+                slider->blockSignals(true);
+                slider->setValue(qRound(v * 10));
+                slider->blockSignals(false);
+                joint_angles_[i] = v;
+                UpdateRobotDisplay();
+            });
+    }
 
-	dock->setWidget(widget);
-	addDockWidget(Qt::RightDockWidgetArea, dock);
+    dock->setWidget(widget);
+    addDockWidget(Qt::RightDockWidgetArea, dock);
 }
 
 void MainWindow::UpdateRobotDisplay()
 {
-	if (robot_meshes_.isEmpty()) return;
+    if (robot_meshes_.isEmpty()) return;
 
-	// 重算 FK（home offset + jog 角度）
-	QVector<gp_Trsf> fk(current_robot_.joints.size());
-	for (int i = 0; i < current_robot_.joints.size(); ++i) {
-		const RbJoint& j = current_robot_.joints[i];
-		double theta = j.offset_deg + (i < 6 ? joint_angles_[i] : 0.0);
-		gp_Trsf dh = DhTrsf(theta, j.d, j.a, j.alpha_deg);
-		fk[i] = (i == 0) ? dh : fk[i - 1];
-		if (i > 0) fk[i].Multiply(dh);
-	}
+    QVector<gp_Trsf> fk = ComputeFkKdl(current_robot_, joint_angles_);
 
-	auto joint_idx = [&](const QString& name) -> int {
-		for (int i = 0; i < current_robot_.joints.size(); ++i)
-			if (current_robot_.joints[i].name == name) return i;
-		return -1;
-		};
+    auto joint_idx = [&](const QString& name) -> int {
+        for (int i = 0; i < current_robot_.joints.size(); ++i)
+            if (current_robot_.joints[i].name == name) return i;
+        return -1;
+    };
 
-	for (auto& m : robot_meshes_) {
-		gp_Trsf local = RpyPosTrsf(m.drawable.rpy, m.drawable.pos);
-		int idx = joint_idx(m.drawable.ref_joint);
-		if (idx >= 0) {
-			gp_Trsf world = fk[idx];
-			world.Multiply(local);
-			local = world;
-		}
-		viewer_->Context()->SetLocation(m.ais, TopLoc_Location(local));
-	}
-	UpdateCoordinateFrames(fk);
-	UpdateRobotJoints();
+    for (auto& m : robot_meshes_) {
+        gp_Trsf local = RpyPosTrsf(m.drawable.rpy, m.drawable.pos);
+        int idx = joint_idx(m.drawable.ref_joint);
+        if (idx >= 0) {
+            gp_Trsf world = fk[idx];
+            world.Multiply(local);
+            local = world;
+        }
+        viewer_->Context()->SetLocation(m.ais, TopLoc_Location(local));
+    }
+    UpdateCoordinateFrames(fk);
+    UpdateRobotJoints();
 
-	// 更新工具位置（挂在 Joint6 / TCP 上）
-if (!tool_ais_.IsNull() && !fk.isEmpty()) {
-    gp_Trsf tool_world = fk.last();
-    tool_world.Multiply(tool_base_trsf_);
-    viewer_->Context()->SetLocation(tool_ais_, TopLoc_Location(tool_world));
+    if (!tool_ais_.IsNull() && !fk.isEmpty()) {
+        gp_Trsf tool_world = fk.last();
+        tool_world.Multiply(tool_base_trsf_);
+        viewer_->Context()->SetLocation(tool_ais_, TopLoc_Location(tool_world));
 
-    // TCP0 坐标系（重建）
-    if (!tool_tcp_frame_.IsNull())
-        viewer_->Context()->Remove(tool_tcp_frame_, Standard_False);
-    gp_Trsf tcp_world = fk.last();
-    tcp_world.Multiply(tool_tcp_trsf_);
-    tool_tcp_frame_ = MakeTrihedron(tcp_world, 40.0);
-    viewer_->Context()->Display(tool_tcp_frame_, Standard_False);
+        if (!tool_tcp_frame_.IsNull())
+            viewer_->Context()->Remove(tool_tcp_frame_, Standard_False);
+        gp_Trsf tcp_world = fk.last();
+        tcp_world.Multiply(tool_tcp_trsf_);
+        tool_tcp_frame_ = MakeTrihedron(tcp_world, 40.0);
+        viewer_->Context()->Display(tool_tcp_frame_, Standard_False);
+    }
+
+    viewer_->Context()->UpdateCurrentViewer();
 }
-	viewer_->Context()->UpdateCurrentViewer();
-}
-
 
 void MainWindow::SetupSceneTree()
 {
-	auto* dock = new QDockWidget(tr("Station Manager"), this);
-	scene_tree_ = new QTreeWidget;
-	scene_tree_->setColumnCount(2);
-	scene_tree_->setHeaderHidden(true);
-	scene_tree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-	scene_tree_->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    auto* dock = new QDockWidget(tr("Station Manager"), this);
+    scene_tree_ = new QTreeWidget;
+    scene_tree_->setColumnCount(2);
+    scene_tree_->setHeaderHidden(true);
+    scene_tree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    scene_tree_->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 
-	auto* station = new QTreeWidgetItem({tr("Station-1"), ""});
-	station->setData(0, Qt::UserRole, "station");
-	scene_tree_->addTopLevelItem(station);
-	station->setExpanded(true);
+    auto* station = new QTreeWidgetItem({tr("Station-1"), ""});
+    station->setData(0, Qt::UserRole, "station");
+    scene_tree_->addTopLevelItem(station);
+    station->setExpanded(true);
 
-	scene_tree_->setContextMenuPolicy(Qt::CustomContextMenu);
-	connect(scene_tree_, &QWidget::customContextMenuRequested,
-	        this, &MainWindow::OnSceneTreeContextMenu);
+    scene_tree_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(scene_tree_, &QWidget::customContextMenuRequested,
+            this, &MainWindow::OnSceneTreeContextMenu);
 
-	dock->setWidget(scene_tree_);
-	addDockWidget(Qt::LeftDockWidgetArea, dock);
+    dock->setWidget(scene_tree_);
+    addDockWidget(Qt::LeftDockWidgetArea, dock);
 }
 
 void MainWindow::AddRobot(const QString& name)
 {
-	auto* station = FindNode(scene_tree_, "station");
-	if (!station) return;
+    auto* station = FindNode(scene_tree_, "station");
+    if (!station) return;
 
-	auto* old = FindNode(scene_tree_, "robot");
-	if (old) delete old;
+    auto* old = FindNode(scene_tree_, "robot");
+    if (old) delete old;
 
-	auto* robot = new QTreeWidgetItem({name, tr("Robot")});
-	robot->setData(0, Qt::UserRole, "robot");
-	station->insertChild(0, robot);
-	robot->setExpanded(true);
+    auto* robot = new QTreeWidgetItem({name, tr("Robot")});
+    robot->setData(0, Qt::UserRole, "robot");
+    station->insertChild(0, robot);
+    robot->setExpanded(true);
 
-	UpdateRobotJoints();
+    UpdateRobotJoints();
 }
 
 void MainWindow::UpdateRobotJoints()
 {
-	auto* robot = FindNode(scene_tree_, "robot");
-	if (!robot) return;
+    auto* robot = FindNode(scene_tree_, "robot");
+    if (!robot) return;
 
-	// 只删除 joint 类型子节点，保留 tool/workpiece 节点
-	for (int i = robot->childCount() - 1; i >= 0; --i) {
-		if (robot->child(i)->data(0, Qt::UserRole).toString() == "joint")
-			delete robot->takeChild(i);
-	}
+    for (int i = robot->childCount() - 1; i >= 0; --i) {
+        if (robot->child(i)->data(0, Qt::UserRole).toString() == "joint")
+            delete robot->takeChild(i);
+    }
 
-	int n = current_robot_.joints.size();
-	for (int i = 0; i < n; ++i) {
-		double angle = (i < 6) ? joint_angles_[i] : 0.0;
-		bool is_tcp = (i == n - 1);
-		QString display_name = is_tcp
-			? current_robot_.joints[i].name + tr(" (TCP)")
-			: current_robot_.joints[i].name;
+    int n = current_robot_.joints.size();
+    for (int i = 0; i < n; ++i) {
+        double angle = (i < 6) ? joint_angles_[i] : 0.0;
+        bool is_tcp = (i == n - 1);
+        QString display_name = is_tcp
+            ? current_robot_.joints[i].name + tr(" (TCP)")
+            : current_robot_.joints[i].name;
 
-		auto* item = new QTreeWidgetItem(
-			{display_name, QString("%1°").arg(angle, 0, 'f', 1)});
-		item->setData(0, Qt::UserRole, "joint");
-		item->setData(0, Qt::UserRole + 1, i);  // 坐标系索引
-		robot->insertChild(i, item);
-	}
+        auto* item = new QTreeWidgetItem(
+            {display_name, QString("%1°").arg(angle, 0, 'f', 1)});
+        item->setData(0, Qt::UserRole, "joint");
+        item->setData(0, Qt::UserRole + 1, i);
+        robot->insertChild(i, item);
+    }
 }
 
 void MainWindow::AddTool(const QString& name, const QString& parent_role)
 {
-	// 1. 在 scene tree 中找到 parent_role 对应的节点
-	auto parent_node = FindNode(scene_tree_, parent_role);
-	if (!parent_node) 
-		return;
-	// 2. 在 parent_node 下添加 tool 节点
-	auto tool_node = new QTreeWidgetItem({ name, tr("Tool") });
-	tool_node->setData(0, Qt::UserRole, "tool");
-	parent_node->addChild(tool_node);
-	tool_node->setExpanded(true);
-	auto tcp = new QTreeWidgetItem({ name + ".TCP0", tr("Frame") });
-	tcp->setData(0, Qt::UserRole, "tcp");
-	tool_node->addChild(tcp);
-	tool_node->setExpanded(true);
+    auto* parent_node = FindNode(scene_tree_, parent_role);
+    if (!parent_node) return;
+
+    auto* tool_node = new QTreeWidgetItem({name, tr("Tool")});
+    tool_node->setData(0, Qt::UserRole, "tool");
+    parent_node->addChild(tool_node);
+    tool_node->setExpanded(true);
+
+    auto* tcp = new QTreeWidgetItem({name + ".TCP0", tr("Frame")});
+    tcp->setData(0, Qt::UserRole, "tcp");
+    tool_node->addChild(tcp);
 }
 
 void MainWindow::AddWorkpiece(const QString& name, const QString& parent_role)
 {
-	auto parent = FindNode(scene_tree_, parent_role);
-	if (!parent) return;
+    auto* parent = FindNode(scene_tree_, parent_role);
+    if (!parent) return;
 
-	auto wp = new QTreeWidgetItem({ name, tr("Workpiece") });
-	wp->setData(0, Qt::UserRole, "workpiece");
-	parent->addChild(wp);
+    auto* wp = new QTreeWidgetItem({name, tr("Workpiece")});
+    wp->setData(0, Qt::UserRole, "workpiece");
+    parent->addChild(wp);
 }
-
-
 
 void MainWindow::UpdateCoordinateFrames(const QVector<gp_Trsf>& fk)
 {
-	// 清除旧帧
-	if (!base_frame_.IsNull())
-		viewer_->Context()->Remove(base_frame_, Standard_False);
-	for (auto& t : joint_frames_)
-		viewer_->Context()->Remove(t, Standard_False);
-	joint_frames_.clear();
+    if (!base_frame_.IsNull())
+        viewer_->Context()->Remove(base_frame_, Standard_False);
+    for (auto& t : joint_frames_)
+        viewer_->Context()->Remove(t, Standard_False);
+    joint_frames_.clear();
 
-	// Base 坐标系：世界原点，默认显示
-	base_frame_ = MakeTrihedron(gp_Trsf(), 80.0);
-	viewer_->Context()->Display(base_frame_, Standard_False);
+    base_frame_ = MakeTrihedron(gp_Trsf(), 80.0);
+    viewer_->Context()->Display(base_frame_, Standard_False);
 
-	int n = fk.size();
-	for (int i = 0; i < n; ++i) {
-		Handle(AIS_Trihedron) tri = MakeTrihedron(fk[i], 50.0);
-		viewer_->Context()->Display(tri, Standard_False);
+    int n = fk.size();
+    for (int i = 0; i < n; ++i) {
+        Handle(AIS_Trihedron) tri = MakeTrihedron(fk[i], 50.0);
+        viewer_->Context()->Display(tri, Standard_False);
 
-		// Joint1-5（非末端）默认隐藏；TCP（末端）默认显示
-		if (i < n - 1)
-			viewer_->Context()->Erase(tri, Standard_False);
+        if (i < n - 1)
+            viewer_->Context()->Erase(tri, Standard_False);
 
-		joint_frames_.append(tri);
-	}
+        joint_frames_.append(tri);
+    }
 }
 
 void MainWindow::OnSceneTreeContextMenu(const QPoint& pos)
 {
-	QTreeWidgetItem* item = scene_tree_->itemAt(pos);
-	if (!item) return;
-	if (item->data(0, Qt::UserRole).toString() != "joint") return;
+    QTreeWidgetItem* item = scene_tree_->itemAt(pos);
+    if (!item) return;
+    if (item->data(0, Qt::UserRole).toString() != "joint") return;
 
-	int idx = item->data(0, Qt::UserRole + 1).toInt();
-	if (idx < 0 || idx >= joint_frames_.size()) return;
+    int idx = item->data(0, Qt::UserRole + 1).toInt();
+    if (idx < 0 || idx >= joint_frames_.size()) return;
 
-	Handle(AIS_Trihedron) tri = joint_frames_[idx];
-	bool visible = viewer_->Context()->IsDisplayed(tri);
+    Handle(AIS_Trihedron) tri = joint_frames_[idx];
+    bool visible = viewer_->Context()->IsDisplayed(tri);
 
-	QMenu menu(this);
-	menu.addAction(visible ? tr("Hide Frame") : tr("Show Frame"),
-	               [this, tri, visible]() {
-		if (visible)
-			viewer_->Context()->Erase(tri, Standard_True);
-		else
-			viewer_->Context()->Display(tri, Standard_True);
-	});
-	menu.exec(scene_tree_->mapToGlobal(pos));
+    QMenu menu(this);
+    menu.addAction(visible ? tr("Hide Frame") : tr("Show Frame"),
+                   [this, tri, visible]() {
+        if (visible)
+            viewer_->Context()->Erase(tri, Standard_True);
+        else
+            viewer_->Context()->Display(tri, Standard_True);
+    });
+    menu.exec(scene_tree_->mapToGlobal(pos));
 }
 
 void MainWindow::OnLoadRobot()
 {
-	QString path = QFileDialog::getOpenFileName(
-		this, tr("Open Robot File"), "",
-		tr("Robot Files (*.xml)"));
-	if (path.isEmpty())
-		return;
+    QString path = QFileDialog::getOpenFileName(
+        this, tr("Open Robot File"), "",
+        tr("Robot Files (*.xml)"));
+    if (path.isEmpty()) return;
 
-	RbRobot robot = RbXmlParser::Parse(path);
-	qDebug() << "Robot:" << robot.name
-		<< "joints:" << robot.joints.size()
-		<< "drawables:" << robot.drawables.size();
+    RbRobot robot = RbXmlParser::Parse(path);
+    qDebug() << "Robot:" << robot.name
+             << "joints:" << robot.joints.size()
+             << "drawables:" << robot.drawables.size();
 
-	for (auto& m : robot_meshes_)
-		viewer_->Context()->Remove(m.ais, Standard_False);
-	robot_meshes_.clear();
+    for (auto& m : robot_meshes_)
+        viewer_->Context()->Remove(m.ais, Standard_False);
+    robot_meshes_.clear();
 
-	current_robot_ = robot;
-	memset(joint_angles_, 0, sizeof(joint_angles_));
-	for (int i = 0; i < 6; ++i) {
-		if (joint_sliders_[i]) joint_sliders_[i]->setValue(0);
-		if (joint_spinboxes_[i]) joint_spinboxes_[i]->setValue(0.0);
-	}
+    current_robot_ = robot;
+    memset(joint_angles_, 0, sizeof(joint_angles_));
+    for (int i = 0; i < 6; ++i) {
+        if (joint_sliders_[i])   joint_sliders_[i]->setValue(0);
+        if (joint_spinboxes_[i]) joint_spinboxes_[i]->setValue(0.0);
+    }
 
-	for (const RbDrawable& drw : robot.drawables) {
-		TopoDS_Shape shape = StlLoader::Load(drw.mesh_file);
-		if (shape.IsNull()) { qDebug() << drw.name << "not found"; continue; }
+    for (const RbDrawable& drw : robot.drawables) {
+        TopoDS_Shape shape = StlLoader::Load(drw.mesh_file);
+        if (shape.IsNull()) { qDebug() << drw.name << "not found"; continue; }
 
-		Handle(AIS_Shape) ais = new AIS_Shape(shape);
-		viewer_->Context()->Display(ais, AIS_Shaded, 0, Standard_False);
-		robot_meshes_.append({ drw, shape, ais });
-	}
+        Handle(AIS_Shape) ais = new AIS_Shape(shape);
+        viewer_->Context()->Display(ais, AIS_Shaded, 0, Standard_False);
+        robot_meshes_.append({drw, shape, ais});
+    }
 
-	AddRobot(current_robot_.name);
-	viewer_->Context()->UpdateCurrentViewer();
-	UpdateRobotDisplay();   // 应用 home 姿态
-	viewer_->View()->FitAll();
+    AddRobot(current_robot_.name);
+    viewer_->Context()->UpdateCurrentViewer();
+    UpdateRobotDisplay();
+    viewer_->View()->FitAll();
 }
-
 
 void MainWindow::OnLoadTool()
 {
-	QString path = QFileDialog::getOpenFileName(
-		this, tr("Load Tool"), "",
-		tr("Tool Files (*.tool *.xml)"));
-	if (path.isEmpty()) return;
+    QString path = QFileDialog::getOpenFileName(
+        this, tr("Load Tool"), "",
+        tr("Tool Files (*.tool *.xml)"));
+    if (path.isEmpty()) return;
 
-	// 支持 .tool（JSON → RWFile）或直接 .xml
-	QString xml_path = path;
-	if (path.endsWith(".tool", Qt::CaseInsensitive)) {
-		QFile f(path); f.open(QIODevice::ReadOnly);
-		QJsonDocument jdoc = QJsonDocument::fromJson(f.readAll());
-		QString rw = jdoc.object().value("RWFile").toString();
-		xml_path = QFileInfo(path).absoluteDir().filePath(rw);
-	}
+    QString xml_path = path;
+    if (path.endsWith(".tool", Qt::CaseInsensitive)) {
+        QFile f(path);
+        f.open(QIODevice::ReadOnly);
+        QJsonDocument jdoc = QJsonDocument::fromJson(f.readAll());
+        QString rw = jdoc.object().value("RWFile").toString();
+        xml_path = QFileInfo(path).absoluteDir().filePath(rw);
+    }
 
+    QString base_dir = QFileInfo(xml_path).absoluteDir().absolutePath();
 
-	QString base_dir = QFileInfo(xml_path).absoluteDir().absolutePath();
-	// 解析 XML
-	QFile xf(xml_path); xf.open(QIODevice::ReadOnly);
-	QDomDocument doc; doc.setContent(&xf);
-	QDomElement root = doc.documentElement();   // <TreeDevice>
+    QFile xf(xml_path);
+    xf.open(QIODevice::ReadOnly);
+    QDomDocument doc;
+    doc.setContent(&xf);
+    QDomElement root = doc.documentElement();
 
-	// 1. STL 路径
-	QString stl_rel = root.elementsByTagName("Polytope").at(0)
-		.toElement().attribute("file");
-	QString stl_path = QDir(base_dir).filePath(stl_rel);
+    QString stl_rel = root.elementsByTagName("Polytope").at(0)
+        .toElement().attribute("file");
+    QString stl_path = QDir(base_dir).filePath(stl_rel);
 
-	// 2. Tool_Base 偏移（通常为 0）
-	QDomElement base_frame = root.elementsByTagName("Frame").at(0).toElement();
-	double base_pos[3] = {}, base_rpy[3] = {};
-	parseXyz(base_frame.firstChildElement("Pos").text(), base_pos);
-	parseXyz(base_frame.firstChildElement("RPY").text(), base_rpy);
-	tool_base_trsf_ = RpyPosTrsf(base_rpy, base_pos);
+    QDomElement base_frame_el = root.elementsByTagName("Frame").at(0).toElement();
+    double base_pos[3] = {}, base_rpy[3] = {};
+    parseXyz(base_frame_el.firstChildElement("Pos").text(), base_pos);
+    parseXyz(base_frame_el.firstChildElement("RPY").text(), base_rpy);
+    tool_base_trsf_ = RpyPosTrsf(base_rpy, base_pos);
 
-	// 3. TCP0 偏移（在 SerialChain/Frame type=EndEffector）
-	double tcp_pos[3] = {}, tcp_rpy[3] = {};
-	QDomNodeList frames = root.elementsByTagName("Frame");
-	for (int i = 0; i < frames.count(); ++i) {
-		QDomElement fe = frames.at(i).toElement();
-		if (fe.attribute("type") == "EndEffector") {
-			parseXyz(fe.firstChildElement("Pos").text(), tcp_pos);
-			parseXyz(fe.firstChildElement("RPY").text(), tcp_rpy);
-			break;
-		}
-	}
-	tool_tcp_trsf_ = RpyPosTrsf(tcp_rpy, tcp_pos);
+    double tcp_pos[3] = {}, tcp_rpy[3] = {};
+    QDomNodeList frames = root.elementsByTagName("Frame");
+    for (int i = 0; i < frames.count(); ++i) {
+        QDomElement fe = frames.at(i).toElement();
+        if (fe.attribute("type") == "EndEffector") {
+            parseXyz(fe.firstChildElement("Pos").text(), tcp_pos);
+            parseXyz(fe.firstChildElement("RPY").text(), tcp_rpy);
+            break;
+        }
+    }
+    tool_tcp_trsf_ = RpyPosTrsf(tcp_rpy, tcp_pos);
 
-	// 加载 STL
-	TopoDS_Shape shape = StlLoader::Load(stl_path);
-	if (shape.IsNull()) {
-		qDebug() << "Tool STL not found:" << stl_path;
-		return;
-	}
+    TopoDS_Shape shape = StlLoader::Load(stl_path);
+    if (shape.IsNull()) {
+        qDebug() << "Tool STL not found:" << stl_path;
+        return;
+    }
 
-	// 清除旧工具
-	if (!tool_ais_.IsNull())
-		viewer_->Context()->Remove(tool_ais_, Standard_False);
-	if (!tool_tcp_frame_.IsNull())
-		viewer_->Context()->Remove(tool_tcp_frame_, Standard_False);
+    if (!tool_ais_.IsNull())
+        viewer_->Context()->Remove(tool_ais_, Standard_False);
+    if (!tool_tcp_frame_.IsNull())
+        viewer_->Context()->Remove(tool_tcp_frame_, Standard_False);
 
-	tool_ais_ = new AIS_Shape(shape);
-	viewer_->Context()->Display(tool_ais_, AIS_Shaded, 0, Standard_False);
+    tool_ais_ = new AIS_Shape(shape);
+    viewer_->Context()->Display(tool_ais_, AIS_Shaded, 0, Standard_False);
 
-	QString tool_name = QFileInfo(xml_path).baseName();
-	AddTool(tool_name, "robot");
+    AddTool(QFileInfo(xml_path).baseName(), "robot");
 
-	viewer_->Context()->UpdateCurrentViewer();
-	UpdateRobotDisplay();   // 立即应用当前 FK 位置
+    viewer_->Context()->UpdateCurrentViewer();
+    UpdateRobotDisplay();
 }
 
 void MainWindow::OnImportWorkpiece()
 {
-	QString path = QFileDialog::getOpenFileName(
-		this, tr("Open STEP File"), "", tr("STEP Files (*.step *.stp)"));
-	if (path.isEmpty())
-		return;
-	int face_count = 0;
-	auto shape = StepImporter::Load(path, &face_count);
-	if (shape.IsNull())
-		return;
+    QString path = QFileDialog::getOpenFileName(
+        this, tr("Open STEP File"), "", tr("STEP Files (*.step *.stp)"));
+    if (path.isEmpty()) return;
 
-	Handle(AIS_Shape) ais_shape = new AIS_Shape(shape);
-	viewer_->Context()->Display(ais_shape, Standard_True);
-	viewer_->View()->FitAll();
+    int face_count = 0;
+    auto shape = StepImporter::Load(path, &face_count);
+    if (shape.IsNull()) return;
 
-	QString file_name = QFileInfo(path).fileName();
-	model_info_->setText(tr("File: %1 | Face: %2").arg(file_name).arg(face_count));
+    Handle(AIS_Shape) ais_shape = new AIS_Shape(shape);
+    viewer_->Context()->Display(ais_shape, Standard_True);
+    viewer_->View()->FitAll();
+
+    model_info_->setText(
+        tr("File: %1 | Face: %2").arg(QFileInfo(path).fileName()).arg(face_count));
 }
 
-void MainWindow::OnViewFront() 
-{ 
-	viewer_->View()->SetProj(V3d_Yneg);          
-	viewer_->View()->FitAll(); 
+void MainWindow::OnViewFront()
+{
+    viewer_->View()->SetProj(V3d_Yneg);
+    viewer_->View()->FitAll();
 }
 
-void MainWindow::OnViewTop() 
-{ 
-	viewer_->View()->SetProj(V3d_Zpos);          
-	viewer_->View()->FitAll(); 
+void MainWindow::OnViewTop()
+{
+    viewer_->View()->SetProj(V3d_Zpos);
+    viewer_->View()->FitAll();
 }
 
-void MainWindow::OnViewSide() 
-{ 
-	viewer_->View()->SetProj(V3d_Xpos);          
-	viewer_->View()->FitAll(); 
+void MainWindow::OnViewSide()
+{
+    viewer_->View()->SetProj(V3d_Xpos);
+    viewer_->View()->FitAll();
 }
 
-void MainWindow::OnViewIsometric() 
-{ 
-	viewer_->View()->SetProj(V3d_XposYnegZpos);  
-	viewer_->View()->FitAll(); 
+void MainWindow::OnViewIsometric()
+{
+    viewer_->View()->SetProj(V3d_XposYnegZpos);
+    viewer_->View()->FitAll();
 }
 
 void MainWindow::OnViewWireframe()
 {
-	viewer_->Context()->SetDisplayMode(AIS_WireFrame, Standard_True);
+    viewer_->Context()->SetDisplayMode(AIS_WireFrame, Standard_True);
 }
 
 void MainWindow::OnViewShaded()
 {
-	viewer_->Context()->SetDisplayMode(AIS_Shaded, Standard_True);
+    viewer_->Context()->SetDisplayMode(AIS_Shaded, Standard_True);
 }
 
 void MainWindow::OnFitAll()
 {
-	viewer_->View()->FitAll();
+    viewer_->View()->FitAll();
 }

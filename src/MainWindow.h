@@ -1,4 +1,5 @@
-#pragma once
+#ifndef GRINDINGAPP_SRC_MAIN_WINDOW_H_
+#define GRINDINGAPP_SRC_MAIN_WINDOW_H_
 
 #include <QMainWindow>
 #include <QLabel>
@@ -25,19 +26,19 @@ public:
     ~MainWindow() override = default;
 
 private slots:
-	void OnImportWorkpiece();
-	void OnViewFront();
-	void OnViewTop();
-	void OnViewSide();
-	void OnViewIsometric();
-	void OnViewWireframe();
-	void OnViewShaded();
-	void OnFitAll();
-	void OnLoadRobot();
-	void OnLoadTool();
-	void OnSceneTreeContextMenu(const QPoint& pos);
+    void OnImportWorkpiece();
+    void OnViewFront();
+    void OnViewTop();
+    void OnViewSide();
+    void OnViewIsometric();
+    void OnViewWireframe();
+    void OnViewShaded();
+    void OnFitAll();
+    void OnLoadRobot();
+    void OnLoadTool();
+    void OnSceneTreeContextMenu(const QPoint& pos);
+
 private:
-    // MainWindow.h 新增
     void SwitchLanguage(const QString& lang);
 
     void SetupMenuBar();
@@ -45,42 +46,40 @@ private:
     void SetupStatusBar();
     void SetupCentralWidget();
 
-	void SetupJogPanel();
-	void UpdateRobotDisplay();
-	void UpdateCoordinateFrames(const QVector<gp_Trsf>& fk);
+    void SetupJogPanel();
+    void UpdateRobotDisplay();
+    void UpdateCoordinateFrames(const QVector<gp_Trsf>& fk);
 
-	void SetupSceneTree();
-	void AddRobot(const QString& name);
-	void UpdateRobotJoints();                      // 更新关节角度，从 UpdateRobotDisplay 调用
-	void AddTool(const QString& name,
-		const QString& parent_role);      // parent_role: "robot" 或 "station"
-	void AddWorkpiece(const QString& name,
-		const QString& parent_role); // parent_role: "robot" 或 "station"
+    void SetupSceneTree();
+    void AddRobot(const QString& name);
+    void UpdateRobotJoints();
+    void AddTool(const QString& name, const QString& parent_role);
+    void AddWorkpiece(const QString& name, const QString& parent_role);
 
-    QLabel* model_info_;   // 状态栏：模型信息
-    QLabel* coord_label_;  // 状态栏：坐标显示
-    OcctViewWidget* viewer_ = nullptr;
+    QLabel*          model_info_;
+    QLabel*          coord_label_;
+    OcctViewWidget*  viewer_ = nullptr;
 
-	// Jog 状态
-	struct RobotMesh {
-		RbDrawable   drawable;
-		TopoDS_Shape original;
-		Handle(AIS_Shape) ais;
-	};
-	QVector<RobotMesh>   robot_meshes_;
-	RbRobot              current_robot_;
-	double               joint_angles_[6] = {};  // 当前关节角，单位：度
+    struct RobotMesh {
+        RbDrawable        drawable;
+        TopoDS_Shape      original;
+        Handle(AIS_Shape) ais;
+    };
+    QVector<RobotMesh>  robot_meshes_;
+    RbRobot             current_robot_;
+    double              joint_angles_[6] = {};
 
-	QSlider* joint_sliders_[6] = {};
-	QDoubleSpinBox* joint_spinboxes_[6] = {};
+    QSlider*        joint_sliders_[6]   = {};
+    QDoubleSpinBox* joint_spinboxes_[6] = {};
 
-	QTreeWidget*                    scene_tree_   = nullptr;
-	QVector<Handle(AIS_Trihedron)>  joint_frames_;  // index = joint index
-	Handle(AIS_Trihedron)           base_frame_;    // robot base (always visible)
+    QTreeWidget*                   scene_tree_   = nullptr;
+    QVector<Handle(AIS_Trihedron)> joint_frames_;
+    Handle(AIS_Trihedron)          base_frame_;
 
-	// 工具状态
-	Handle(AIS_Shape)     tool_ais_;
-	Handle(AIS_Trihedron) tool_tcp_frame_;
-	gp_Trsf               tool_base_trsf_;  // 工具 mesh 相对法兰的偏移
-	gp_Trsf               tool_tcp_trsf_;   // TCP0 相对法兰的偏移
+    Handle(AIS_Shape)     tool_ais_;
+    Handle(AIS_Trihedron) tool_tcp_frame_;
+    gp_Trsf               tool_base_trsf_;
+    gp_Trsf               tool_tcp_trsf_;
 };
+
+#endif  // GRINDINGAPP_SRC_MAIN_WINDOW_H_

@@ -17,9 +17,10 @@ if(MSVC)
 endif()
 
 # 查找依赖
-find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL Xml)
+find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL Xml Test)
 find_package(Qt5 OPTIONAL_COMPONENTS LinguistTools)
 find_package(OpenCASCADE REQUIRED)
+find_package(orocos_kdl REQUIRED)
 
 # 收集源文件
 set(Header
@@ -29,6 +30,7 @@ set(Header
     src/StlLoader.h
     src/RbXmlParser.h
     src/RobotDisplay.h
+    src/RobotKinematics.h
 )
 
 set(Source
@@ -39,6 +41,7 @@ set(Source
     src/StlLoader.cpp
     src/RbXmlParser.cpp
     src/RobotDisplay.cpp
+    src/RobotKinematics.cpp
 )
 
 source_group("Header Files" FILES ${Header})
@@ -114,9 +117,40 @@ target_link_libraries(GrindingApp PRIVATE
     #TKSTEPBase
     #TKXSBase
     TKDESTL
+
+    orocos-kdl
 )
 
 # 设置输出目录
 set_target_properties(GrindingApp PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+# Unit tests
+enable_testing()
+
+set(KinematicsTestSrc
+    src/RobotKinematics.cpp
+    src/RobotDisplay.cpp
+    src/RbXmlParser.cpp
+)
+
+add_executable(TestRobotKinematics
+    tests/TestRobotKinematics.cpp
+    ${KinematicsTestSrc}
+)
+target_include_directories(TestRobotKinematics PRIVATE
+    src
+    $<BUILD_INTERFACE:${OpenCASCADE_INCLUDE_DIR}>
+)
+target_link_libraries(TestRobotKinematics PRIVATE
+    Qt5::Core
+    Qt5::Xml
+    Qt5::Test
+    TKernel
+    TKMath
+    TKG3d
+    TKBRep
+    orocos-kdl
+)
+add_test(NAME TestRobotKinematics COMMAND TestRobotKinematics)
