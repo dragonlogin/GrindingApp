@@ -33,6 +33,13 @@
 #include "RobotDisplay.h"
 #include "RobotKinematics.h"
 
+using namespace nl::occ;
+using namespace nl::kinematics;
+using namespace nl::core;
+
+namespace nl {
+namespace ui {
+
 static void ParseXyz(const std::string& s, double out[3])
 {
     auto p = QString::fromStdString(s).split(' ', Qt::SkipEmptyParts);
@@ -488,7 +495,7 @@ void MainWindow::OnImportWorkpiece()
     if (path.isEmpty()) return;
 
     int face_count = 0;
-    auto shape = StepImporter::Load(path.toStdString(), &face_count);
+    auto shape = occ::StepImporter::Load(path.toStdString(), &face_count);
     if (shape.IsNull()) return;
 
     Handle(AIS_Shape) ais_shape = new AIS_Shape(shape);
@@ -536,4 +543,7 @@ void MainWindow::OnViewShaded()
 void MainWindow::OnFitAll()
 {
     viewer_->View()->FitAll();
+}
+
+}
 }

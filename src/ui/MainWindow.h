@@ -18,6 +18,9 @@
 #include "GrindingUIExport.h"
 #include "RbXmlParser.h"
 
+namespace nl {
+namespace ui {
+
 class OcctViewWidget;
 
 class GRINDING_UI_EXPORT MainWindow : public QMainWindow
@@ -64,12 +67,12 @@ private:
     OcctViewWidget*  viewer_ = nullptr;
 
     struct RobotMesh {
-        RbDrawable        drawable;
-        TopoDS_Shape      original;
-        Handle(AIS_Shape) ais;
+        nl::core::RbDrawable  drawable;
+        TopoDS_Shape          original;
+        Handle(AIS_Shape)     ais;
     };
     std::vector<RobotMesh>  robot_meshes_;
-    RbRobot                 current_robot_;
+    nl::core::RbRobot       current_robot_;
     double                  joint_angles_[6] = {};
 
     QSlider*        joint_sliders_[6]   = {};
@@ -84,5 +87,8 @@ private:
     gp_Trsf               tool_base_trsf_;
     gp_Trsf               tool_tcp_trsf_;
 };
+
+} // namespace ui
+} // namespace nl
 
 #endif  // GRINDINGAPP_SRC_UI_MAIN_WINDOW_H_

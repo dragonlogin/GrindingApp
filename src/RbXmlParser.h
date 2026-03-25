@@ -6,6 +6,9 @@
 
 #include "GrindingCoreExport.h"
 
+namespace nl {
+namespace core {
+
 struct RbJoint {
     std::string name;
     double alpha_deg;
@@ -32,5 +35,8 @@ class GRINDING_CORE_EXPORT RbXmlParser {
 public:
     static RbRobot Parse(const std::string& xml_path);
 };
+
+} // namespace core
+} // namespace nl
 
 #endif  // GRINDINGAPP_SRC_RBXMLPARSER_H_

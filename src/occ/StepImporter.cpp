@@ -8,6 +8,9 @@
 
 #include <iostream>
 
+namespace nl {
+namespace occ {
+
 TopoDS_Shape StepImporter::Load(const std::string& file_path, int* face_count)
 {
     STEPControl_Reader reader;
@@ -34,3 +37,6 @@ TopoDS_Shape StepImporter::Load(const std::string& file_path, int* face_count)
 
     return shape;
 }
+
+} // namespace occ
+} // namespace nl

@@ -6,6 +6,9 @@
 #include <QDebug>
 #include <QString>
 
+namespace nl {
+namespace core {
+
 RbRobot RbXmlParser::Parse(const std::string& xml_path)
 {
     RbRobot robot;
@@ -88,3 +91,6 @@ RbRobot RbXmlParser::Parse(const std::string& xml_path)
 
     return robot;
 }
+
+} // namespace core
+} // namespace nl

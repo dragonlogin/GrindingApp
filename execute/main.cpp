@@ -4,6 +4,7 @@
 #include <QLocale>
 #include "MainWindow.h"
 
+using namespace nl::ui;
 int main(int argc, char* argv[])
 {
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);

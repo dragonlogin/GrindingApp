@@ -13,6 +13,9 @@ class AIS_InteractiveContext;
 class WNT_Window;
 class OpenGl_GraphicDriver;
 
+namespace nl {
+namespace ui {
+
 class GRINDING_UI_EXPORT OcctViewWidget : public QWidget
 {
     Q_OBJECT
@@ -49,5 +52,8 @@ private:
     bool   rotating_ = false;
     bool   panning_  = false;
 };
+
+} // namespace ui
+} // namespace nl
 
 #endif  // GRINDINGAPP_SRC_UI_OCCT_VIEW_WIDGET_H_

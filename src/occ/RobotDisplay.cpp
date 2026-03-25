@@ -2,7 +2,13 @@
 #include <cmath>
 #include <vector>
 
-static constexpr double kDeg = M_PI / 180.0;
+using namespace nl::core;
+namespace nl {
+namespace occ {
+
+namespace {
+constexpr double kDeg = M_PI / 180.0;
+} // namespace
 
 gp_Trsf DhTrsf(double theta_deg, double d, double a, double alpha_deg)
 {
@@ -52,3 +58,6 @@ std::vector<gp_Trsf> ComputeFkHome(const RbRobot& robot)
     }
     return fk;
 }
+
+} // namespace occ
+} // namespace nl
