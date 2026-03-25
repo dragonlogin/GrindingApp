@@ -1,11 +1,17 @@
-add_library(GrindingCore STATIC
-    GrindingAppExport.h
+set(HEADERS
+    GrindingCoreExport.h
     RbXmlParser.h
+)
+
+set(SOURCES
     RbXmlParser.cpp
 )
 
+add_library(GrindingCore SHARED ${HEADERS} ${SOURCES})
 
-# Expose src/ so all consumers can #include "RbXmlParser.h" / "GrindingAppExport.h"
+target_compile_definitions(GrindingCore PRIVATE GRINDING_CORE_BUILDING_DLL)
+
+# Expose src/ so all consumers can #include "RbXmlParser.h" / "*Export.h"
 target_include_directories(GrindingCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
@@ -13,4 +19,9 @@ target_include_directories(GrindingCore PUBLIC
 target_link_libraries(GrindingCore PUBLIC
     Qt5::Core
     Qt5::Xml
+)
+
+set_target_properties(GrindingCore PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )

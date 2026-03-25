@@ -4,9 +4,9 @@
 #include <string>
 #include <TopoDS_Shape.hxx>
 
-#include "GrindingAppExport.h"
+#include "GrindingOccExport.h"
 
-class GRINDINGAPP_EXPORT StlLoader {
+class GRINDING_OCC_EXPORT StlLoader {
 public:
     // Returns Null shape on failure.
     static TopoDS_Shape Load(const std::string& stl_path);

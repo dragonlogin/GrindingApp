@@ -4,7 +4,7 @@
 #include <QWidget>
 #include <Standard_Handle.hxx>
 
-#include "GrindingAppExport.h"
+#include "GrindingUIExport.h"
 
 // Forward declarations to avoid pulling large OCCT headers.
 class V3d_Viewer;
@@ -13,7 +13,7 @@ class AIS_InteractiveContext;
 class WNT_Window;
 class OpenGl_GraphicDriver;
 
-class GRINDINGAPP_EXPORT OcctViewWidget : public QWidget
+class GRINDING_UI_EXPORT OcctViewWidget : public QWidget
 {
     Q_OBJECT
 

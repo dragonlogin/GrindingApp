@@ -1,8 +1,15 @@
-add_library(GrindingKinematics STATIC
+set(HEADERS
+    GrindingKinematicsExport.h
     RobotKinematics.h
+)
+
+set(SOURCES
     RobotKinematics.cpp
 )
 
+add_library(GrindingKinematics SHARED ${HEADERS} ${SOURCES})
+
+target_compile_definitions(GrindingKinematics PRIVATE GRINDING_KINEMATICS_BUILDING_DLL)
 
 # Expose src/kdl/; inherits src/ from GrindingCore
 target_include_directories(GrindingKinematics PUBLIC
@@ -15,4 +22,9 @@ target_link_libraries(GrindingKinematics PUBLIC
     orocos-kdl
     Eigen3::Eigen
     TKernel TKMath TKG3d TKBRep
+)
+
+set_target_properties(GrindingKinematics PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )

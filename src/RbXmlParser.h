@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "GrindingAppExport.h"
+#include "GrindingCoreExport.h"
 
 struct RbJoint {
     std::string name;
@@ -28,7 +28,7 @@ struct RbRobot {
     std::vector<RbDrawable> drawables;
 };
 
-class GRINDINGAPP_EXPORT RbXmlParser {
+class GRINDING_CORE_EXPORT RbXmlParser {
 public:
     static RbRobot Parse(const std::string& xml_path);
 };

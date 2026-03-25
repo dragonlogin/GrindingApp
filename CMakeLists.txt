@@ -40,7 +40,7 @@ add_subdirectory(src/ui)
 set(TS_FILES translations/zh_CN.ts)
 if(Qt5LinguistTools_FOUND)
     set(ALL_HEADERS
-        src/GrindingAppExport.h
+        src/GrindingCoreExport.h
         src/RbXmlParser.h
         src/ui/MainWindow.h
         src/ui/OcctViewWidget.h
@@ -66,11 +66,12 @@ if(Qt5LinguistTools_FOUND)
 endif()
 
 # ── GrindingApp (Executable) ─────────────────────────────────────
-add_executable(GrindingApp
-    ${QM_FILES}
+set(APP_SOURCES
     execute/main.cpp
     resources/resources.qrc
 )
+
+add_executable(GrindingApp ${QM_FILES} ${APP_SOURCES})
 
 # Links all four static modules; PUBLIC deps propagate transitively
 target_link_libraries(GrindingApp PRIVATE

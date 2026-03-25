@@ -4,9 +4,9 @@
 #include <string>
 #include <TopoDS_Shape.hxx>
 
-#include "GrindingAppExport.h"
+#include "GrindingOccExport.h"
 
-class GRINDINGAPP_EXPORT StepImporter {
+class GRINDING_OCC_EXPORT StepImporter {
 public:
     // Load a STEP file and triangulate. face_count may be nullptr.
     static TopoDS_Shape Load(const std::string& file_path, int* face_count = nullptr);

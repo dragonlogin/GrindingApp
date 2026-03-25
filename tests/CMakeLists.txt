@@ -1,6 +1,8 @@
-add_executable(TestRobotKinematics
+set(SOURCES
     TestRobotKinematics.cpp
 )
+
+add_executable(TestRobotKinematics ${SOURCES})
 
 # GrindingOcc and GrindingKinematics both transitively bring in GrindingCore
 target_link_libraries(TestRobotKinematics PRIVATE

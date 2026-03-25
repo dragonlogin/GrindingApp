@@ -15,12 +15,12 @@
 #include <AIS_Shape.hxx>
 #include <gp_Trsf.hxx>
 
-#include "GrindingAppExport.h"
+#include "GrindingUIExport.h"
 #include "RbXmlParser.h"
 
 class OcctViewWidget;
 
-class GRINDINGAPP_EXPORT MainWindow : public QMainWindow
+class GRINDING_UI_EXPORT MainWindow : public QMainWindow
 {
     Q_OBJECT
 
