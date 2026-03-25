@@ -1,9 +1,11 @@
-#ifndef GRINDINGAPP_SRC_MAIN_WINDOW_H_
-#define GRINDINGAPP_SRC_MAIN_WINDOW_H_
+#ifndef GRINDINGAPP_SRC_UI_MAIN_WINDOW_H_
+#define GRINDINGAPP_SRC_UI_MAIN_WINDOW_H_
+
+#include <string>
+#include <vector>
 
 #include <QMainWindow>
 #include <QLabel>
-#include <QVector>
 #include <QSlider>
 #include <QDoubleSpinBox>
 #include <QDockWidget>
@@ -13,11 +15,12 @@
 #include <AIS_Shape.hxx>
 #include <gp_Trsf.hxx>
 
+#include "GrindingAppExport.h"
 #include "RbXmlParser.h"
 
 class OcctViewWidget;
 
-class MainWindow : public QMainWindow
+class GRINDINGAPP_EXPORT MainWindow : public QMainWindow
 {
     Q_OBJECT
 
@@ -39,7 +42,7 @@ private slots:
     void OnSceneTreeContextMenu(const QPoint& pos);
 
 private:
-    void SwitchLanguage(const QString& lang);
+    void SwitchLanguage(const std::string& lang);
 
     void SetupMenuBar();
     void SetupToolBar();
@@ -48,13 +51,13 @@ private:
 
     void SetupJogPanel();
     void UpdateRobotDisplay();
-    void UpdateCoordinateFrames(const QVector<gp_Trsf>& fk);
+    void UpdateCoordinateFrames(const std::vector<gp_Trsf>& fk);
 
     void SetupSceneTree();
-    void AddRobot(const QString& name);
+    void AddRobot(const std::string& name);
     void UpdateRobotJoints();
-    void AddTool(const QString& name, const QString& parent_role);
-    void AddWorkpiece(const QString& name, const QString& parent_role);
+    void AddTool(const std::string& name, const std::string& parent_role);
+    void AddWorkpiece(const std::string& name, const std::string& parent_role);
 
     QLabel*          model_info_;
     QLabel*          coord_label_;
@@ -65,16 +68,16 @@ private:
         TopoDS_Shape      original;
         Handle(AIS_Shape) ais;
     };
-    QVector<RobotMesh>  robot_meshes_;
-    RbRobot             current_robot_;
-    double              joint_angles_[6] = {};
+    std::vector<RobotMesh>  robot_meshes_;
+    RbRobot                 current_robot_;
+    double                  joint_angles_[6] = {};
 
     QSlider*        joint_sliders_[6]   = {};
     QDoubleSpinBox* joint_spinboxes_[6] = {};
 
-    QTreeWidget*                   scene_tree_   = nullptr;
-    QVector<Handle(AIS_Trihedron)> joint_frames_;
-    Handle(AIS_Trihedron)          base_frame_;
+    QTreeWidget*                        scene_tree_   = nullptr;
+    std::vector<Handle(AIS_Trihedron)>  joint_frames_;
+    Handle(AIS_Trihedron)               base_frame_;
 
     Handle(AIS_Shape)     tool_ais_;
     Handle(AIS_Trihedron) tool_tcp_frame_;
@@ -82,4 +85,4 @@ private:
     gp_Trsf               tool_tcp_trsf_;
 };
 
-#endif  // GRINDINGAPP_SRC_MAIN_WINDOW_H_
+#endif  // GRINDINGAPP_SRC_UI_MAIN_WINDOW_H_

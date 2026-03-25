@@ -62,7 +62,7 @@
 
 ## 3. 单元测试要求 (Unit Testing)
 
-- **强制测试**：每次修改类实现后，必须同步更新或创建对应的单元测试文件
+- **强制测试**：每次修改类实现后，必须同步更新或创建对应的单元测试文件, 测试文件名与类名相同，后缀为 `_test.cpp`, 例如 `RobotKinematics.cpp` 对应 `TestRobotKinematics.cpp`,单独写cmakeLists.txt文件添加测试
 - **框架**：使用 Qt Test 框架（QTest）
 - **CMake 集成**：自动在 `CMakeLists.txt` 中添加 `add_test` 和 `target_link_libraries(xxx Qt6::Test)`
 

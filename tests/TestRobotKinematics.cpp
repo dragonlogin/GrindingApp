@@ -17,12 +17,12 @@ static RbRobot makeIrb140()
     // IRB140 DH parameters (Craig convention, angles in deg, lengths in mm)
     RbRobot robot;
     robot.name = "IRB140";
-    robot.joints.append({"Joint1", -90.0,  70.0, 352.0,   0.0});
-    robot.joints.append({"Joint2",   0.0, 360.0,   0.0, -90.0});
-    robot.joints.append({"Joint3",  90.0,   0.0,   0.0,  90.0});
-    robot.joints.append({"Joint4", -90.0,   0.0, 380.0,   0.0});
-    robot.joints.append({"Joint5",  90.0,   0.0,   0.0,   0.0});
-    robot.joints.append({"Joint6",   0.0,   0.0,  65.0,   0.0});
+    robot.joints.push_back({"Joint1", -90.0,  70.0, 352.0,   0.0});
+    robot.joints.push_back({"Joint2",   0.0, 360.0,   0.0, -90.0});
+    robot.joints.push_back({"Joint3",  90.0,   0.0,   0.0,  90.0});
+    robot.joints.push_back({"Joint4", -90.0,   0.0, 380.0,   0.0});
+    robot.joints.push_back({"Joint5",  90.0,   0.0,   0.0,   0.0});
+    robot.joints.push_back({"Joint6",   0.0,   0.0,  65.0,   0.0});
     return robot;
 }
 
@@ -44,8 +44,8 @@ void TestRobotKinematics::testFkMatchesManualAtHome()
     RbRobot robot = makeIrb140();
     double angles[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-    QVector<gp_Trsf> fk_kdl    = ComputeFkKdl(robot, angles);
-    QVector<gp_Trsf> fk_manual = ComputeFkHome(robot);
+    std::vector<gp_Trsf> fk_kdl    = ComputeFkKdl(robot, angles);
+    std::vector<gp_Trsf> fk_manual = ComputeFkHome(robot);
 
     QCOMPARE(fk_kdl.size(), fk_manual.size());
     for (int i = 0; i < fk_kdl.size(); ++i)
@@ -58,11 +58,11 @@ void TestRobotKinematics::testFkMatchesManualAtNonZero()
     RbRobot robot = makeIrb140();
     double angles[6] = {30.0, -45.0, 60.0, 90.0, -30.0, 15.0};
 
-    QVector<gp_Trsf> fk_kdl = ComputeFkKdl(robot, angles);
+    std::vector<gp_Trsf> fk_kdl = ComputeFkKdl(robot, angles);
 
     // Compute reference using the manual DH loop (same logic as UpdateRobotDisplay).
     int n = robot.joints.size();
-    QVector<gp_Trsf> fk_manual(n);
+    std::vector<gp_Trsf> fk_manual(n);
     for (int i = 0; i < n; ++i) {
         const RbJoint& j = robot.joints[i];
         double theta = j.offset_deg + (i < 6 ? angles[i] : 0.0);

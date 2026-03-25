@@ -1,11 +1,13 @@
 #ifndef GRINDINGAPP_SRC_RBXMLPARSER_H_
 #define GRINDINGAPP_SRC_RBXMLPARSER_H_
 
-#include <QString>
-#include <QVector>
+#include <string>
+#include <vector>
+
+#include "GrindingAppExport.h"
 
 struct RbJoint {
-    QString name;
+    std::string name;
     double alpha_deg;
     double a;           // mm
     double d;           // mm
@@ -13,22 +15,22 @@ struct RbJoint {
 };
 
 struct RbDrawable {
-    QString name;
-    QString ref_joint;  // "Robot_Base" or "Joint1".."Joint6"
-    double rpy[3];      // degrees: roll, pitch, yaw
-    double pos[3];      // mm
-    QString mesh_file;  // absolute path (with .stl extension)
+    std::string name;
+    std::string ref_joint;  // "Robot_Base" or "Joint1".."Joint6"
+    double rpy[3];          // degrees: roll, pitch, yaw
+    double pos[3];          // mm
+    std::string mesh_file;  // absolute path (with .stl extension)
 };
 
 struct RbRobot {
-    QString name;
-    QVector<RbJoint>    joints;
-    QVector<RbDrawable> drawables;
+    std::string name;
+    std::vector<RbJoint>    joints;
+    std::vector<RbDrawable> drawables;
 };
 
-class RbXmlParser {
+class GRINDINGAPP_EXPORT RbXmlParser {
 public:
-    static RbRobot Parse(const QString& xml_path);
+    static RbRobot Parse(const std::string& xml_path);
 };
 
 #endif  // GRINDINGAPP_SRC_RBXMLPARSER_H_

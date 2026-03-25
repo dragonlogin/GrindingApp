@@ -1,5 +1,8 @@
 #include "MainWindow.h"
 
+#include <string>
+#include <vector>
+
 #include <QDebug>
 #include <QMenuBar>
 #include <QToolBar>
@@ -30,18 +33,18 @@
 #include "RobotDisplay.h"
 #include "RobotKinematics.h"
 
-static void parseXyz(const QString& s, double out[3])
+static void ParseXyz(const std::string& s, double out[3])
 {
-    auto p = s.split(' ', Qt::SkipEmptyParts);
+    auto p = QString::fromStdString(s).split(' ', Qt::SkipEmptyParts);
     if (p.size() == 3)
         for (int i = 0; i < 3; ++i) out[i] = p[i].toDouble();
 }
 
-static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const QString& role)
+static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const std::string& role)
 {
     for (int i = 0; i < parent->childCount(); ++i) {
         auto child = parent->child(i);
-        if (child->data(0, Qt::UserRole).toString() == role)
+        if (child->data(0, Qt::UserRole).toString().toStdString() == role)
             return child;
         if (auto found = FindNode(child, role))
             return found;
@@ -49,11 +52,11 @@ static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const QString& role)
     return nullptr;
 }
 
-static QTreeWidgetItem* FindNode(QTreeWidget* tree, const QString& role)
+static QTreeWidgetItem* FindNode(QTreeWidget* tree, const std::string& role)
 {
     for (int i = 0; i < tree->topLevelItemCount(); ++i) {
         auto item = tree->topLevelItem(i);
-        if (item->data(0, Qt::UserRole).toString() == role)
+        if (item->data(0, Qt::UserRole).toString().toStdString() == role)
             return item;
         if (auto found = FindNode(item, role))
             return found;
@@ -87,10 +90,10 @@ MainWindow::MainWindow(QWidget* parent)
     SetupSceneTree();
 }
 
-void MainWindow::SwitchLanguage(const QString& lang)
+void MainWindow::SwitchLanguage(const std::string& lang)
 {
     QSettings settings("GrindingApp", "GrindingApp");
-    settings.setValue("language", lang);
+    settings.setValue("language", QString::fromStdString(lang));
     QMessageBox::information(this, tr("Language"),
         tr("Language changed. Please restart the application."));
 }
@@ -157,7 +160,7 @@ void MainWindow::SetupJogPanel()
     auto widget = new QWidget;
     auto layout = new QGridLayout(widget);
 
-    const QString labels[6] = {"J1", "J2", "J3", "J4", "J5", "J6"};
+    const char* labels[6] = {"J1", "J2", "J3", "J4", "J5", "J6"};
 
     for (int i = 0; i < 6; ++i) {
         layout->addWidget(new QLabel(labels[i]), i, 0);
@@ -199,12 +202,12 @@ void MainWindow::SetupJogPanel()
 
 void MainWindow::UpdateRobotDisplay()
 {
-    if (robot_meshes_.isEmpty()) return;
+    if (robot_meshes_.empty()) return;
 
-    QVector<gp_Trsf> fk = ComputeFkKdl(current_robot_, joint_angles_);
+    std::vector<gp_Trsf> fk = ComputeFkKdl(current_robot_, joint_angles_);
 
-    auto joint_idx = [&](const QString& name) -> int {
-        for (int i = 0; i < current_robot_.joints.size(); ++i)
+    auto joint_idx = [&](const std::string& name) -> int {
+        for (int i = 0; i < static_cast<int>(current_robot_.joints.size()); ++i)
             if (current_robot_.joints[i].name == name) return i;
         return -1;
     };
@@ -222,14 +225,14 @@ void MainWindow::UpdateRobotDisplay()
     UpdateCoordinateFrames(fk);
     UpdateRobotJoints();
 
-    if (!tool_ais_.IsNull() && !fk.isEmpty()) {
-        gp_Trsf tool_world = fk.last();
+    if (!tool_ais_.IsNull() && !fk.empty()) {
+        gp_Trsf tool_world = fk.back();
         tool_world.Multiply(tool_base_trsf_);
         viewer_->Context()->SetLocation(tool_ais_, TopLoc_Location(tool_world));
 
         if (!tool_tcp_frame_.IsNull())
             viewer_->Context()->Remove(tool_tcp_frame_, Standard_False);
-        gp_Trsf tcp_world = fk.last();
+        gp_Trsf tcp_world = fk.back();
         tcp_world.Multiply(tool_tcp_trsf_);
         tool_tcp_frame_ = MakeTrihedron(tcp_world, 40.0);
         viewer_->Context()->Display(tool_tcp_frame_, Standard_False);
@@ -260,7 +263,7 @@ void MainWindow::SetupSceneTree()
     addDockWidget(Qt::LeftDockWidgetArea, dock);
 }
 
-void MainWindow::AddRobot(const QString& name)
+void MainWindow::AddRobot(const std::string& name)
 {
     auto* station = FindNode(scene_tree_, "station");
     if (!station) return;
@@ -268,7 +271,7 @@ void MainWindow::AddRobot(const QString& name)
     auto* old = FindNode(scene_tree_, "robot");
     if (old) delete old;
 
-    auto* robot = new QTreeWidgetItem({name, tr("Robot")});
+    auto* robot = new QTreeWidgetItem({QString::fromStdString(name), tr("Robot")});
     robot->setData(0, Qt::UserRole, "robot");
     station->insertChild(0, robot);
     robot->setExpanded(true);
@@ -286,13 +289,13 @@ void MainWindow::UpdateRobotJoints()
             delete robot->takeChild(i);
     }
 
-    int n = current_robot_.joints.size();
+    int n = static_cast<int>(current_robot_.joints.size());
     for (int i = 0; i < n; ++i) {
         double angle = (i < 6) ? joint_angles_[i] : 0.0;
         bool is_tcp = (i == n - 1);
         QString display_name = is_tcp
-            ? current_robot_.joints[i].name + tr(" (TCP)")
-            : current_robot_.joints[i].name;
+            ? QString::fromStdString(current_robot_.joints[i].name) + tr(" (TCP)")
+            : QString::fromStdString(current_robot_.joints[i].name);
 
         auto* item = new QTreeWidgetItem(
             {display_name, QString("%1°").arg(angle, 0, 'f', 1)});
@@ -302,32 +305,33 @@ void MainWindow::UpdateRobotJoints()
     }
 }
 
-void MainWindow::AddTool(const QString& name, const QString& parent_role)
+void MainWindow::AddTool(const std::string& name, const std::string& parent_role)
 {
     auto* parent_node = FindNode(scene_tree_, parent_role);
     if (!parent_node) return;
 
-    auto* tool_node = new QTreeWidgetItem({name, tr("Tool")});
+    auto* tool_node = new QTreeWidgetItem({QString::fromStdString(name), tr("Tool")});
     tool_node->setData(0, Qt::UserRole, "tool");
     parent_node->addChild(tool_node);
     tool_node->setExpanded(true);
 
-    auto* tcp = new QTreeWidgetItem({name + ".TCP0", tr("Frame")});
+    auto* tcp = new QTreeWidgetItem(
+        {QString::fromStdString(name) + ".TCP0", tr("Frame")});
     tcp->setData(0, Qt::UserRole, "tcp");
     tool_node->addChild(tcp);
 }
 
-void MainWindow::AddWorkpiece(const QString& name, const QString& parent_role)
+void MainWindow::AddWorkpiece(const std::string& name, const std::string& parent_role)
 {
     auto* parent = FindNode(scene_tree_, parent_role);
     if (!parent) return;
 
-    auto* wp = new QTreeWidgetItem({name, tr("Workpiece")});
+    auto* wp = new QTreeWidgetItem({QString::fromStdString(name), tr("Workpiece")});
     wp->setData(0, Qt::UserRole, "workpiece");
     parent->addChild(wp);
 }
 
-void MainWindow::UpdateCoordinateFrames(const QVector<gp_Trsf>& fk)
+void MainWindow::UpdateCoordinateFrames(const std::vector<gp_Trsf>& fk)
 {
     if (!base_frame_.IsNull())
         viewer_->Context()->Remove(base_frame_, Standard_False);
@@ -338,7 +342,7 @@ void MainWindow::UpdateCoordinateFrames(const QVector<gp_Trsf>& fk)
     base_frame_ = MakeTrihedron(gp_Trsf(), 80.0);
     viewer_->Context()->Display(base_frame_, Standard_False);
 
-    int n = fk.size();
+    int n = static_cast<int>(fk.size());
     for (int i = 0; i < n; ++i) {
         Handle(AIS_Trihedron) tri = MakeTrihedron(fk[i], 50.0);
         viewer_->Context()->Display(tri, Standard_False);
@@ -346,7 +350,7 @@ void MainWindow::UpdateCoordinateFrames(const QVector<gp_Trsf>& fk)
         if (i < n - 1)
             viewer_->Context()->Erase(tri, Standard_False);
 
-        joint_frames_.append(tri);
+        joint_frames_.push_back(tri);
     }
 }
 
@@ -357,7 +361,7 @@ void MainWindow::OnSceneTreeContextMenu(const QPoint& pos)
     if (item->data(0, Qt::UserRole).toString() != "joint") return;
 
     int idx = item->data(0, Qt::UserRole + 1).toInt();
-    if (idx < 0 || idx >= joint_frames_.size()) return;
+    if (idx < 0 || idx >= static_cast<int>(joint_frames_.size())) return;
 
     Handle(AIS_Trihedron) tri = joint_frames_[idx];
     bool visible = viewer_->Context()->IsDisplayed(tri);
@@ -380,8 +384,8 @@ void MainWindow::OnLoadRobot()
         tr("Robot Files (*.xml)"));
     if (path.isEmpty()) return;
 
-    RbRobot robot = RbXmlParser::Parse(path);
-    qDebug() << "Robot:" << robot.name
+    RbRobot robot = RbXmlParser::Parse(path.toStdString());
+    qDebug() << "Robot:" << robot.name.c_str()
              << "joints:" << robot.joints.size()
              << "drawables:" << robot.drawables.size();
 
@@ -398,11 +402,11 @@ void MainWindow::OnLoadRobot()
 
     for (const RbDrawable& drw : robot.drawables) {
         TopoDS_Shape shape = StlLoader::Load(drw.mesh_file);
-        if (shape.IsNull()) { qDebug() << drw.name << "not found"; continue; }
+        if (shape.IsNull()) { qDebug() << drw.name.c_str() << "not found"; continue; }
 
         Handle(AIS_Shape) ais = new AIS_Shape(shape);
         viewer_->Context()->Display(ais, AIS_Shaded, 0, Standard_False);
-        robot_meshes_.append({drw, shape, ais});
+        robot_meshes_.push_back({drw, shape, ais});
     }
 
     AddRobot(current_robot_.name);
@@ -435,14 +439,14 @@ void MainWindow::OnLoadTool()
     doc.setContent(&xf);
     QDomElement root = doc.documentElement();
 
-    QString stl_rel = root.elementsByTagName("Polytope").at(0)
-        .toElement().attribute("file");
+    QString stl_rel  = root.elementsByTagName("Polytope").at(0)
+                           .toElement().attribute("file");
     QString stl_path = QDir(base_dir).filePath(stl_rel);
 
     QDomElement base_frame_el = root.elementsByTagName("Frame").at(0).toElement();
     double base_pos[3] = {}, base_rpy[3] = {};
-    parseXyz(base_frame_el.firstChildElement("Pos").text(), base_pos);
-    parseXyz(base_frame_el.firstChildElement("RPY").text(), base_rpy);
+    ParseXyz(base_frame_el.firstChildElement("Pos").text().toStdString(), base_pos);
+    ParseXyz(base_frame_el.firstChildElement("RPY").text().toStdString(), base_rpy);
     tool_base_trsf_ = RpyPosTrsf(base_rpy, base_pos);
 
     double tcp_pos[3] = {}, tcp_rpy[3] = {};
@@ -450,14 +454,14 @@ void MainWindow::OnLoadTool()
     for (int i = 0; i < frames.count(); ++i) {
         QDomElement fe = frames.at(i).toElement();
         if (fe.attribute("type") == "EndEffector") {
-            parseXyz(fe.firstChildElement("Pos").text(), tcp_pos);
-            parseXyz(fe.firstChildElement("RPY").text(), tcp_rpy);
+            ParseXyz(fe.firstChildElement("Pos").text().toStdString(), tcp_pos);
+            ParseXyz(fe.firstChildElement("RPY").text().toStdString(), tcp_rpy);
             break;
         }
     }
     tool_tcp_trsf_ = RpyPosTrsf(tcp_rpy, tcp_pos);
 
-    TopoDS_Shape shape = StlLoader::Load(stl_path);
+    TopoDS_Shape shape = StlLoader::Load(stl_path.toStdString());
     if (shape.IsNull()) {
         qDebug() << "Tool STL not found:" << stl_path;
         return;
@@ -471,7 +475,7 @@ void MainWindow::OnLoadTool()
     tool_ais_ = new AIS_Shape(shape);
     viewer_->Context()->Display(tool_ais_, AIS_Shaded, 0, Standard_False);
 
-    AddTool(QFileInfo(xml_path).baseName(), "robot");
+    AddTool(QFileInfo(xml_path).baseName().toStdString(), "robot");
 
     viewer_->Context()->UpdateCurrentViewer();
     UpdateRobotDisplay();
@@ -484,7 +488,7 @@ void MainWindow::OnImportWorkpiece()
     if (path.isEmpty()) return;
 
     int face_count = 0;
-    auto shape = StepImporter::Load(path, &face_count);
+    auto shape = StepImporter::Load(path.toStdString(), &face_count);
     if (shape.IsNull()) return;
 
     Handle(AIS_Shape) ais_shape = new AIS_Shape(shape);

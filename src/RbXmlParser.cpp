@@ -4,13 +4,14 @@
 #include <QDir>
 #include <QDomDocument>
 #include <QDebug>
+#include <QString>
 
-RbRobot RbXmlParser::Parse(const QString& xml_path)
+RbRobot RbXmlParser::Parse(const std::string& xml_path)
 {
     RbRobot robot;
-    QFile file(xml_path);
+    QFile file(QString::fromStdString(xml_path));
     if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "RbXmlParser: cannot open" << xml_path;
+        qWarning() << "RbXmlParser: cannot open" << xml_path.c_str();
         return robot;
     }
 
@@ -25,21 +26,22 @@ RbRobot RbXmlParser::Parse(const QString& xml_path)
         return robot;
     }
 
-    QString base_dir = QFileInfo(xml_path).absoluteDir().absolutePath();
+    QString base_dir = QFileInfo(QString::fromStdString(xml_path))
+                           .absoluteDir().absolutePath();
     QDomElement root = doc.documentElement();  // <SerialDevice>
-    robot.name = root.attribute("name");
+    robot.name = root.attribute("name").toStdString();
 
     // 解析 DHJoint
     QDomNodeList dh_nodes = root.elementsByTagName("DHJoint");
     for (int i = 0; i < dh_nodes.count(); ++i) {
         QDomElement el = dh_nodes.at(i).toElement();
         RbJoint j;
-        j.name       = el.attribute("name");
+        j.name       = el.attribute("name").toStdString();
         j.alpha_deg  = el.attribute("alpha").toDouble();
         j.a          = el.attribute("a").toDouble();
         j.d          = el.attribute("d").toDouble();
         j.offset_deg = el.attribute("offset").toDouble();
-        robot.joints.append(j);
+        robot.joints.push_back(j);
     }
 
     // 解析 Drawable
@@ -47,8 +49,8 @@ RbRobot RbXmlParser::Parse(const QString& xml_path)
     for (int i = 0; i < draw_nodes.count(); ++i) {
         QDomElement el = draw_nodes.at(i).toElement();
         RbDrawable d;
-        d.name      = el.attribute("name");
-        d.ref_joint = el.attribute("refframe");
+        d.name      = el.attribute("name").toStdString();
+        d.ref_joint = el.attribute("refframe").toStdString();
         memset(d.rpy, 0, sizeof(d.rpy));
         memset(d.pos, 0, sizeof(d.pos));
 
@@ -74,14 +76,14 @@ RbRobot RbXmlParser::Parse(const QString& xml_path)
 
         QDomElement poly_el = el.firstChildElement("Polytope");
         if (!poly_el.isNull()) {
-            QString rel = poly_el.attribute("file");
+            QString rel  = poly_el.attribute("file");
             QString full = QDir(base_dir).filePath(rel + ".stl");
             if (!QFile::exists(full))
                 full = QDir(base_dir).filePath(rel + ".STL");
-            d.mesh_file = full;
+            d.mesh_file = full.toStdString();
         }
 
-        robot.drawables.append(d);
+        robot.drawables.push_back(d);
     }
 
     return robot;

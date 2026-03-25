@@ -1,8 +1,10 @@
-#ifndef GRINDINGAPP_SRC_OCCT_VIEW_WIDGET_H_
-#define GRINDINGAPP_SRC_OCCT_VIEW_WIDGET_H_
+#ifndef GRINDINGAPP_SRC_UI_OCCT_VIEW_WIDGET_H_
+#define GRINDINGAPP_SRC_UI_OCCT_VIEW_WIDGET_H_
 
 #include <QWidget>
 #include <Standard_Handle.hxx>
+
+#include "GrindingAppExport.h"
 
 // Forward declarations to avoid pulling large OCCT headers.
 class V3d_Viewer;
@@ -11,7 +13,7 @@ class AIS_InteractiveContext;
 class WNT_Window;
 class OpenGl_GraphicDriver;
 
-class OcctViewWidget : public QWidget
+class GRINDINGAPP_EXPORT OcctViewWidget : public QWidget
 {
     Q_OBJECT
 
@@ -48,4 +50,4 @@ private:
     bool   panning_  = false;
 };
 
-#endif  // GRINDINGAPP_SRC_OCCT_VIEW_WIDGET_H_
+#endif  // GRINDINGAPP_SRC_UI_OCCT_VIEW_WIDGET_H_

@@ -10,147 +10,125 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# Windows MSVC 编译选项
+# Windows MSVC compile options
 if(MSVC)
     add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
     add_compile_options(/utf-8 /nologo)
+    set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG}   /utf-8")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /utf-8")
+    set(ENV{CL_UTF8} 1)
 endif()
 
-# 查找依赖
+# Dependencies
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL Xml Test)
 find_package(Qt5 OPTIONAL_COMPONENTS LinguistTools)
 find_package(OpenCASCADE REQUIRED)
 find_package(orocos_kdl REQUIRED)
+find_package(Eigen3 REQUIRED)
 
-# 收集源文件
-set(Header
-    src/MainWindow.h
-    src/OcctViewWidget.h
-    src/StepImporter.h
-    src/StlLoader.h
+# ──────────────────────────────────────────────────────────────────
+# GrindingAppLib — Shared library (DLL)
+# Modules:
+#   src/          — shared data types (RbXmlParser)
+#   src/ui/       — Qt UI layer (MainWindow, OcctViewWidget)
+#   src/occ/      — OpenCASCADE operations (StlLoader, StepImporter, RobotDisplay)
+#   src/kdl/      — KDL kinematics (RobotKinematics)
+# ──────────────────────────────────────────────────────────────────
+set(LIB_HEADERS
+    src/GrindingAppExport.h
     src/RbXmlParser.h
-    src/RobotDisplay.h
-    src/RobotKinematics.h
+    src/ui/MainWindow.h
+    src/ui/OcctViewWidget.h
+    src/occ/StlLoader.h
+    src/occ/StepImporter.h
+    src/occ/RobotDisplay.h
+    src/kdl/RobotKinematics.h
 )
 
-set(Source
-    src/main.cpp
-    src/MainWindow.cpp
-    src/OcctViewWidget.cpp
-    src/StepImporter.cpp
-    src/StlLoader.cpp
+set(LIB_SOURCES
     src/RbXmlParser.cpp
-    src/RobotDisplay.cpp
-    src/RobotKinematics.cpp
+    src/ui/MainWindow.cpp
+    src/ui/OcctViewWidget.cpp
+    src/occ/StlLoader.cpp
+    src/occ/StepImporter.cpp
+    src/occ/RobotDisplay.cpp
+    src/kdl/RobotKinematics.cpp
 )
 
-source_group("Header Files" FILES ${Header})
-#source_group("Source " FILES ${Source})
+source_group("Header Files"        FILES src/GrindingAppExport.h src/RbXmlParser.h)
+source_group("Header Files\\ui"    FILES src/ui/MainWindow.h src/ui/OcctViewWidget.h)
+source_group("Header Files\\occ"   FILES src/occ/StlLoader.h src/occ/StepImporter.h src/occ/RobotDisplay.h)
+source_group("Header Files\\kdl"   FILES src/kdl/RobotKinematics.h)
 
 set(TS_FILES translations/zh_CN.ts)
 
-# 生成/更新 .ts 文件（需要 LinguistTools）
 if(Qt5LinguistTools_FOUND)
     qt5_create_translation(QM_FILES
-        ${Header}
-        ${Source}
+        ${LIB_HEADERS}
+        ${LIB_SOURCES}
         ${TS_FILES}
     )
 endif()
 
-add_executable(GrindingApp
+add_library(GrindingAppLib SHARED
     ${QM_FILES}
-    ${Source}
+    ${LIB_HEADERS}
+    ${LIB_SOURCES}
+    resources/resources.qrc
 )
 
-target_include_directories(GrindingApp PRIVATE
+target_compile_definitions(GrindingAppLib PRIVATE GRINDINGAPPLIB_EXPORTS)
+
+# All module dirs exposed as PUBLIC so consumers (execute, tests) find headers
+target_include_directories(GrindingAppLib PUBLIC
     src
+    src/ui
+    src/occ
+    src/kdl
     $<BUILD_INTERFACE:${OpenCASCADE_INCLUDE_DIR}>
 )
 
-target_link_libraries(GrindingApp PRIVATE
+set(OCCT_LIBS
+    TKernel TKMath TKG2d TKG3d TKGeomBase TKGeomAlgo TKBRep TKTopAlgo
+    TKV3d TKOpenGl TKService TKMeshVS
+    TKPrim TKBool TKBO TKFeat TKFillet TKOffset TKShHealing
+    TKCAF TKCDF TKStd
+    TKMesh TKRWMesh
+    TKDESTEP TKDESTL
+)
+
+target_link_libraries(GrindingAppLib PUBLIC
     Qt5::Core
     Qt5::Gui
     Qt5::Widgets
     Qt5::OpenGL
     Qt5::Xml
-
-     # 核心数学和几何库
-    TKernel
-    TKMath
-    TKG2d
-    TKG3d
-    TKGeomBase
-    TKGeomAlgo
-    TKBRep
-    TKTopAlgo
-    
-    # 3D显示和可视化
-    TKV3d
-    TKOpenGl
-    TKService
-    TKMeshVS
-    
-    # 建模和特征
-    TKPrim
-    TKBool
-    TKBO
-    TKFeat
-    TKFillet
-    TKOffset
-    TKShHealing
-    
-    # CAD格式支持
-    TKCAF
-    TKCDF
-    TKStd
-    
-    # 网格处理
-    TKMesh
-    TKRWMesh
-
-    # CAD格式支持
-    TKDESTEP
-    #TKSTEP
-    #TKSTEP209
-    #TKSTEPAttr
-    #TKSTEPBase
-    #TKXSBase
-    TKDESTL
-
+    ${OCCT_LIBS}
     orocos-kdl
+    Eigen3::Eigen
 )
 
-# 设置输出目录
+set_target_properties(GrindingAppLib PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+)
+
+# ──────────────────────────────────────────────────────────────────
+# GrindingApp — Executable
+# ──────────────────────────────────────────────────────────────────
+add_executable(GrindingApp
+    execute/main.cpp
+)
+
+target_link_libraries(GrindingApp PRIVATE GrindingAppLib)
+
 set_target_properties(GrindingApp PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
+# ──────────────────────────────────────────────────────────────────
 # Unit tests
+# ──────────────────────────────────────────────────────────────────
 enable_testing()
-
-set(KinematicsTestSrc
-    src/RobotKinematics.cpp
-    src/RobotDisplay.cpp
-    src/RbXmlParser.cpp
-)
-
-add_executable(TestRobotKinematics
-    tests/TestRobotKinematics.cpp
-    ${KinematicsTestSrc}
-)
-target_include_directories(TestRobotKinematics PRIVATE
-    src
-    $<BUILD_INTERFACE:${OpenCASCADE_INCLUDE_DIR}>
-)
-target_link_libraries(TestRobotKinematics PRIVATE
-    Qt5::Core
-    Qt5::Xml
-    Qt5::Test
-    TKernel
-    TKMath
-    TKG3d
-    TKBRep
-    orocos-kdl
-)
-add_test(NAME TestRobotKinematics COMMAND TestRobotKinematics)
+add_subdirectory(tests)

@@ -1,5 +1,6 @@
 #include "RobotDisplay.h"
 #include <cmath>
+#include <vector>
 
 static constexpr double kDeg = M_PI / 180.0;
 
@@ -36,10 +37,10 @@ gp_Trsf RpyPosTrsf(const double rpy[3], const double pos[3])
     return trsf;
 }
 
-QVector<gp_Trsf> ComputeFkHome(const RbRobot& robot)
+std::vector<gp_Trsf> ComputeFkHome(const RbRobot& robot)
 {
-    QVector<gp_Trsf> fk(robot.joints.size());
-    for (int i = 0; i < robot.joints.size(); ++i) {
+    std::vector<gp_Trsf> fk(robot.joints.size());
+    for (int i = 0; i < static_cast<int>(robot.joints.size()); ++i) {
         const RbJoint& j = robot.joints[i];
         gp_Trsf dh = DhTrsf(j.offset_deg, j.d, j.a, j.alpha_deg);
         if (i == 0) {
