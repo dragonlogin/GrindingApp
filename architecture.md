@@ -13,16 +13,52 @@ Qt5 + OpenCASCADE (OCCT) 机器人磨削仿真应用。
 
 ---
 
+## CMake 模块架构
+
+```
+GrindingCore  (STATIC)          src/
+    │  Qt5::Core/Xml, 共享数据类型
+    │
+    ├── GrindingOcc  (STATIC)   src/occ/
+    │     OpenCASCADE OCCT libs
+    │
+    └── GrindingKinematics (STATIC)  src/kdl/
+          orocos-kdl, Eigen3
+
+GrindingUI  (STATIC)            src/ui/
+    Qt5::Widgets/OpenGL
+    └── 依赖 GrindingCore + GrindingOcc + GrindingKinematics
+
+GrindingAppLib  (SHARED DLL)
+    └── 聚合 GrindingCore + GrindingOcc + GrindingKinematics + GrindingUI
+        + resources.qrc
+
+GrindingApp  (EXE)   execute/main.cpp  → links GrindingAppLib
+TestRobotKinematics  (EXE)  tests/     → links GrindingAppLib + Qt5::Test
+```
+
+PUBLIC include 目录随依赖链自动传播，无需消费方手动添加：
+
+| 模块 | 暴露的 include 路径 |
+|---|---|
+| `GrindingCore` | `src/` |
+| `GrindingOcc` | `src/occ/`（继承 `src/`） |
+| `GrindingKinematics` | `src/kdl/`（继承 `src/`） |
+| `GrindingUI` | `src/ui/`（继承所有上游） |
+
+---
+
 ## 构建产物
 
-| 目标 | 类型 | 路径 |
+| CMake 目标 | 类型 | 输出路径 |
 |---|---|---|
+| `GrindingCore` | STATIC | `build/src/Release/GrindingCore.lib` |
+| `GrindingOcc` | STATIC | `build/src/occ/Release/GrindingOcc.lib` |
+| `GrindingKinematics` | STATIC | `build/src/kdl/Release/GrindingKinematics.lib` |
+| `GrindingUI` | STATIC | `build/src/ui/Release/GrindingUI.lib` |
 | `GrindingAppLib` | SHARED DLL | `build/bin/Release/GrindingAppLib.dll` |
 | `GrindingApp` | Executable | `build/bin/Release/GrindingApp.exe` |
 | `TestRobotKinematics` | Test Executable | `build/tests/Release/TestRobotKinematics.exe` |
-
-- `GrindingApp` 仅包含 `execute/main.cpp`，链接 `GrindingAppLib`
-- 测试直接链接 `GrindingAppLib`（继承所有 PUBLIC 依赖，无需重复声明）
 
 ---
 
@@ -31,55 +67,59 @@ Qt5 + OpenCASCADE (OCCT) 机器人磨削仿真应用。
 ```
 GrindingApp/
 ├── execute/
-│   └── main.cpp              # 可执行入口：QApplication + MainWindow
-├── src/                      # GrindingAppLib 库源码
-│   ├── GrindingAppExport.h   # DLL 导出宏（GRINDINGAPP_EXPORT）
-│   ├── RbXmlParser.h/cpp     # 共享数据类型：RbRobot / RbJoint / RbDrawable
-│   ├── ui/                   # Qt UI 层
-│   │   ├── MainWindow.h/cpp  # 主窗口：菜单、Jog面板、场景树、OCCT渲染
+│   └── main.cpp                  # 可执行入口：QApplication + MainWindow
+├── src/
+│   ├── CMakeLists.txt            # GrindingCore (STATIC)
+│   ├── GrindingAppExport.h       # DLL 导出宏（GRINDINGAPP_EXPORT）
+│   ├── RbXmlParser.h/cpp         # 共享数据类型：RbRobot / RbJoint / RbDrawable
+│   ├── ui/
+│   │   ├── CMakeLists.txt        # GrindingUI (STATIC)
+│   │   ├── MainWindow.h/cpp      # 主窗口：菜单、Jog面板、场景树、OCCT渲染
 │   │   └── OcctViewWidget.h/cpp  # Qt Widget 封装 OCCT V3d_View
-│   ├── occ/                  # OpenCASCADE 操作层
-│   │   ├── StlLoader.h/cpp   # 加载 .stl → TopoDS_Shape
-│   │   ├── StepImporter.h/cpp# 加载 .step → TopoDS_Shape（工件用）
-│   │   └── RobotDisplay.h/cpp# DhTrsf / RpyPosTrsf / ComputeFkHome
-│   └── kdl/                  # KDL 运动学层
-│       └── RobotKinematics.h/cpp  # ComputeFkKdl（KDL FK）
+│   ├── occ/
+│   │   ├── CMakeLists.txt        # GrindingOcc (STATIC)
+│   │   ├── StlLoader.h/cpp       # 加载 .stl → TopoDS_Shape
+│   │   ├── StepImporter.h/cpp    # 加载 .step → TopoDS_Shape（工件用）
+│   │   └── RobotDisplay.h/cpp    # DhTrsf / RpyPosTrsf / ComputeFkHome
+│   └── kdl/
+│       ├── CMakeLists.txt        # GrindingKinematics (STATIC)
+│       └── RobotKinematics.h/cpp # ComputeFkKdl（KDL FK）
 ├── tests/
-│   ├── CMakeLists.txt        # 独立测试构建：链接 GrindingAppLib
-│   └── TestRobotKinematics.cpp  # Qt Test：KDL FK vs 手工 DH 对比
+│   ├── CMakeLists.txt            # TestRobotKinematics → links GrindingAppLib
+│   └── TestRobotKinematics.cpp   # Qt Test：KDL FK vs 手工 DH 对比
 ├── model/
-│   ├── robot/IRB140/         # ABB IRB140 机器人模型
-│   │   ├── IRB140.rb.xml     # RobWork 格式：DH参数 + 网格路径
-│   │   └── Geometry/*.stl    # 7个 STL（BASE + LINK1..6）
-│   └── tool/Burr/            # 打磨工具
-│       ├── Burr.xml          # 工具坐标系定义（TCP0 偏移）
-│       ├── Burr.tool         # 工具元数据（引用 Burr.xml）
-│       └── Tool.stl          # 工具网格
-├── resources/resources.qrc   # Qt 资源（编译进 DLL）
-├── translations/zh_CN.ts     # 中文翻译源文件
-├── CMakeLists.txt            # 根构建配置
-└── vcpkg.json                # vcpkg 依赖声明
+│   ├── robot/IRB140/             # ABB IRB140 机器人模型
+│   │   ├── IRB140.rb.xml         # RobWork 格式：DH参数 + 网格路径
+│   │   └── Geometry/*.stl        # 7个 STL（BASE + LINK1..6）
+│   └── tool/Burr/                # 打磨工具
+│       ├── Burr.xml              # 工具坐标系定义（TCP0 偏移）
+│       ├── Burr.tool             # 工具元数据（引用 Burr.xml）
+│       └── Tool.stl              # 工具网格
+├── resources/resources.qrc       # Qt 资源（编译进 DLL）
+├── translations/zh_CN.ts         # 中文翻译源文件
+├── CMakeLists.txt                # 根构建配置（聚合各模块）
+└── vcpkg.json                    # vcpkg 依赖声明
 ```
 
 ---
 
 ## 模块职责
 
-### `src/` 根 — 共享数据类型
+### `src/` — GrindingCore（共享数据类型）
 
 | 文件 | 职责 |
 |---|---|
 | `GrindingAppExport.h` | `GRINDINGAPP_EXPORT` 宏：构建时 `dllexport`，使用时 `dllimport` |
 | `RbXmlParser.h/cpp` | 静态 `Parse(xml_path)` → `RbRobot`（含 DH 参数和 STL 路径） |
 
-### `src/ui/` — Qt UI 层
+### `src/ui/` — GrindingUI（Qt UI 层）
 
 | 文件 | 职责 |
 |---|---|
 | `MainWindow.h/cpp` | 主窗口：UI 组装、场景树、Jog 面板、机器人/工具/工件加载 |
 | `OcctViewWidget.h/cpp` | 封装 OCCT 3D 视口，暴露 `Context()` / `View()` / `Viewer()` |
 
-### `src/occ/` — OpenCASCADE 操作层
+### `src/occ/` — GrindingOcc（OpenCASCADE 操作层）
 
 | 文件 | 职责 |
 |---|---|
@@ -87,7 +127,7 @@ GrindingApp/
 | `StepImporter.h/cpp` | 静态 `Load(path, face_count*)` → `TopoDS_Shape`（工件 STEP 导入） |
 | `RobotDisplay.h/cpp` | `DhTrsf()`、`RpyPosTrsf()`、`ComputeFkHome()` |
 
-### `src/kdl/` — KDL 运动学层
+### `src/kdl/` — GrindingKinematics（KDL 运动学层）
 
 | 文件 | 职责 |
 |---|---|
@@ -157,6 +197,8 @@ RbXmlParser::Parse()          → RbRobot（DH参数 + STL路径）
 | 修改 STL 加载逻辑 | `src/occ/StlLoader.h/cpp` |
 | 修改 OCCT 显示风格 | `src/ui/MainWindow.cpp` → `OnViewWireframe()` / `OnViewShaded()` |
 | 添加新测试 | `tests/TestRobotKinematics.cpp` + `tests/CMakeLists.txt` |
+| 新增 occ 模块功能 | `src/occ/` 下新建文件 + `src/occ/CMakeLists.txt` |
+| 新增运动学功能 | `src/kdl/` 下新建文件 + `src/kdl/CMakeLists.txt` |
 
 ---
 
@@ -195,6 +237,9 @@ gp_Trsf                tool_tcp_trsf_    // 工具 TCP 偏移
 # CMake 路径（VS 内置）
 CMAKE="D:/Program Files/Microsoft Visual Studio/2022/Professional/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe"
 
+# 配置（首次或 CMakeLists.txt 变更后）
+"$CMAKE" -S . -B build -DVCPKG_MANIFEST_INSTALL=OFF
+
 # 构建
 "$CMAKE" --build build --config Release
 
@@ -206,9 +251,11 @@ cd build && ctest --output-on-failure -C Release
 
 ## 外部依赖（vcpkg）
 
-| 库 | 用途 |
-|---|---|
-| Qt5 (Core/Gui/Widgets/OpenGL/Xml/Test) | UI 框架、XML 解析、测试 |
-| OpenCASCADE (OCCT) | 3D 几何内核、STEP/STL 加载、渲染 |
-| orocos-kdl | 机器人正/逆运动学（KDL Chain） |
-| Eigen3 | 线性代数（KDL 依赖） |
+| 库 | 模块 | 用途 |
+|---|---|---|
+| Qt5 Core/Xml | GrindingCore | 数据类型、XML 解析 |
+| Qt5 Gui/Widgets/OpenGL | GrindingUI | UI 框架 |
+| Qt5 Test | Tests | 单元测试 |
+| OpenCASCADE (OCCT) | GrindingOcc / GrindingKinematics | 3D 几何内核、STEP/STL、渲染 |
+| orocos-kdl | GrindingKinematics | 机器人正/逆运动学 |
+| Eigen3 | GrindingKinematics | 线性代数（KDL 依赖） |

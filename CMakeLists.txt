@@ -26,86 +26,57 @@ find_package(OpenCASCADE REQUIRED)
 find_package(orocos_kdl REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-# ──────────────────────────────────────────────────────────────────
-# GrindingAppLib — Shared library (DLL)
-# Modules:
-#   src/          — shared data types (RbXmlParser)
-#   src/ui/       — Qt UI layer (MainWindow, OcctViewWidget)
-#   src/occ/      — OpenCASCADE operations (StlLoader, StepImporter, RobotDisplay)
-#   src/kdl/      — KDL kinematics (RobotKinematics)
-# ──────────────────────────────────────────────────────────────────
-set(LIB_HEADERS
-    src/GrindingAppExport.h
-    src/RbXmlParser.h
-    src/ui/MainWindow.h
-    src/ui/OcctViewWidget.h
-    src/occ/StlLoader.h
-    src/occ/StepImporter.h
-    src/occ/RobotDisplay.h
-    src/kdl/RobotKinematics.h
-)
+# ── Sub-modules (each becomes a STATIC library) ──────────────────
+#   GrindingCore        src/
+#   GrindingOcc         src/occ/
+#   GrindingKinematics  src/kdl/
+#   GrindingUI          src/ui/
+add_subdirectory(src)
+add_subdirectory(src/occ)
+add_subdirectory(src/kdl)
+add_subdirectory(src/ui)
 
-set(LIB_SOURCES
-    src/RbXmlParser.cpp
-    src/ui/MainWindow.cpp
-    src/ui/OcctViewWidget.cpp
-    src/occ/StlLoader.cpp
-    src/occ/StepImporter.cpp
-    src/occ/RobotDisplay.cpp
-    src/kdl/RobotKinematics.cpp
-)
-
-source_group("Header Files"        FILES src/GrindingAppExport.h src/RbXmlParser.h)
-source_group("Header Files\\ui"    FILES src/ui/MainWindow.h src/ui/OcctViewWidget.h)
-source_group("Header Files\\occ"   FILES src/occ/StlLoader.h src/occ/StepImporter.h src/occ/RobotDisplay.h)
-source_group("Header Files\\kdl"   FILES src/kdl/RobotKinematics.h)
-
+# ── Translation (optional) ───────────────────────────────────────
 set(TS_FILES translations/zh_CN.ts)
-
 if(Qt5LinguistTools_FOUND)
+    set(ALL_HEADERS
+        src/GrindingAppExport.h
+        src/RbXmlParser.h
+        src/ui/MainWindow.h
+        src/ui/OcctViewWidget.h
+        src/occ/StlLoader.h
+        src/occ/StepImporter.h
+        src/occ/RobotDisplay.h
+        src/kdl/RobotKinematics.h
+    )
+    set(ALL_SOURCES
+        src/RbXmlParser.cpp
+        src/ui/MainWindow.cpp
+        src/ui/OcctViewWidget.cpp
+        src/occ/StlLoader.cpp
+        src/occ/StepImporter.cpp
+        src/occ/RobotDisplay.cpp
+        src/kdl/RobotKinematics.cpp
+    )
     qt5_create_translation(QM_FILES
-        ${LIB_HEADERS}
-        ${LIB_SOURCES}
+        ${ALL_HEADERS}
+        ${ALL_SOURCES}
         ${TS_FILES}
     )
 endif()
 
+# ── GrindingAppLib (SHARED DLL) ──────────────────────────────────
+# Aggregates all four static modules + Qt resources.
 add_library(GrindingAppLib SHARED
     ${QM_FILES}
-    ${LIB_HEADERS}
-    ${LIB_SOURCES}
     resources/resources.qrc
 )
 
-target_compile_definitions(GrindingAppLib PRIVATE GRINDINGAPPLIB_EXPORTS)
-
-# All module dirs exposed as PUBLIC so consumers (execute, tests) find headers
-target_include_directories(GrindingAppLib PUBLIC
-    src
-    src/ui
-    src/occ
-    src/kdl
-    $<BUILD_INTERFACE:${OpenCASCADE_INCLUDE_DIR}>
-)
-
-set(OCCT_LIBS
-    TKernel TKMath TKG2d TKG3d TKGeomBase TKGeomAlgo TKBRep TKTopAlgo
-    TKV3d TKOpenGl TKService TKMeshVS
-    TKPrim TKBool TKBO TKFeat TKFillet TKOffset TKShHealing
-    TKCAF TKCDF TKStd
-    TKMesh TKRWMesh
-    TKDESTEP TKDESTL
-)
-
 target_link_libraries(GrindingAppLib PUBLIC
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::OpenGL
-    Qt5::Xml
-    ${OCCT_LIBS}
-    orocos-kdl
-    Eigen3::Eigen
+    GrindingCore
+    GrindingOcc
+    GrindingKinematics
+    GrindingUI
 )
 
 set_target_properties(GrindingAppLib PROPERTIES
@@ -114,9 +85,7 @@ set_target_properties(GrindingAppLib PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
-# ──────────────────────────────────────────────────────────────────
-# GrindingApp — Executable
-# ──────────────────────────────────────────────────────────────────
+# ── GrindingApp (Executable) ─────────────────────────────────────
 add_executable(GrindingApp
     execute/main.cpp
 )
@@ -127,8 +96,6 @@ set_target_properties(GrindingApp PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
-# ──────────────────────────────────────────────────────────────────
-# Unit tests
-# ──────────────────────────────────────────────────────────────────
+# ── Unit tests ───────────────────────────────────────────────────
 enable_testing()
 add_subdirectory(tests)
