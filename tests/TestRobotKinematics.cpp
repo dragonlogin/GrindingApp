@@ -44,7 +44,7 @@ void TestRobotKinematics::testFkMatchesManualAtHome()
     RbRobot robot = makeIrb140();
     double angles[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-    std::vector<gp_Trsf> fk_kdl    = ComputeFkKdl(robot, angles);
+    std::vector<gp_Trsf> fk_kdl    = ComputeFk(robot, angles);
     std::vector<gp_Trsf> fk_manual = ComputeFkHome(robot);
 
     QCOMPARE(fk_kdl.size(), fk_manual.size());
@@ -58,7 +58,7 @@ void TestRobotKinematics::testFkMatchesManualAtNonZero()
     RbRobot robot = makeIrb140();
     double angles[6] = {30.0, -45.0, 60.0, 90.0, -30.0, 15.0};
 
-    std::vector<gp_Trsf> fk_kdl = ComputeFkKdl(robot, angles);
+    std::vector<gp_Trsf> fk_kdl = ComputeFk(robot, angles);
 
     // Compute reference using the manual DH loop (same logic as UpdateRobotDisplay).
     int n = robot.joints.size();

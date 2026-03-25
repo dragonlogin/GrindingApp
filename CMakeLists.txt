@@ -25,14 +25,14 @@ find_package(Qt5 OPTIONAL_COMPONENTS LinguistTools)
 find_package(OpenCASCADE REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-# ── Sub-modules (STATIC libraries) ──────────────────────────────
+# ── Sub-modules (SHARED libraries) ──────────────────────────────
 #   GrindingCore        src/
 #   GrindingOcc         src/occ/
-#   GrindingKinematics  src/kdl/
+#   GrindingKinematics  src/kinematics/
 #   GrindingUI          src/ui/
 add_subdirectory(src)
 add_subdirectory(src/occ)
-add_subdirectory(src/kdl)
+add_subdirectory(src/kinematics)
 add_subdirectory(src/ui)
 
 # ── Translation (optional) ───────────────────────────────────────
@@ -46,7 +46,7 @@ if(Qt5LinguistTools_FOUND)
         src/occ/StlLoader.h
         src/occ/StepImporter.h
         src/occ/RobotDisplay.h
-        src/kdl/RobotKinematics.h
+        src/kinematics/RobotKinematics.h
     )
     set(ALL_SOURCES
         src/RbXmlParser.cpp
@@ -55,7 +55,7 @@ if(Qt5LinguistTools_FOUND)
         src/occ/StlLoader.cpp
         src/occ/StepImporter.cpp
         src/occ/RobotDisplay.cpp
-        src/kdl/RobotKinematics.cpp
+        src/kinematics/RobotKinematics.cpp
     )
     qt5_create_translation(QM_FILES
         ${ALL_HEADERS}

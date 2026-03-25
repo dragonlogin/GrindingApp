@@ -40,7 +40,7 @@ Eigen::Matrix4d ComputeDhMatrix(double theta_deg, double d, double a, double alp
 
 }  // namespace
 
-std::vector<gp_Trsf> ComputeFkKdl(const RbRobot& robot, const double joint_angles[6])
+std::vector<gp_Trsf> ComputeFk(const RbRobot& robot, const double joint_angles[6])
 {
     int n = static_cast<int>(robot.joints.size());
     std::vector<gp_Trsf> result(n);

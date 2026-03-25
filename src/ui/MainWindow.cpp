@@ -204,7 +204,7 @@ void MainWindow::UpdateRobotDisplay()
 {
     if (robot_meshes_.empty()) return;
 
-    std::vector<gp_Trsf> fk = ComputeFkKdl(current_robot_, joint_angles_);
+    std::vector<gp_Trsf> fk = ComputeFk(current_robot_, joint_angles_);
 
     auto joint_idx = [&](const std::string& name) -> int {
         for (int i = 0; i < static_cast<int>(current_robot_.joints.size()); ++i)
