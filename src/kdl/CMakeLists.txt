@@ -19,7 +19,6 @@ target_include_directories(GrindingKinematics PUBLIC
 
 target_link_libraries(GrindingKinematics PUBLIC
     GrindingCore
-    orocos-kdl
     Eigen3::Eigen
     TKernel TKMath TKG3d TKBRep
 )

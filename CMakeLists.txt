@@ -23,7 +23,6 @@ endif()
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL Xml Test)
 find_package(Qt5 OPTIONAL_COMPONENTS LinguistTools)
 find_package(OpenCASCADE REQUIRED)
-find_package(orocos_kdl REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 # ── Sub-modules (STATIC libraries) ──────────────────────────────

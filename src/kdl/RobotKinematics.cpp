@@ -3,63 +3,57 @@
 #include <cmath>
 #include <vector>
 
-#include <kdl/chain.hpp>
-#include <kdl/chainfksolverpos_recursive.hpp>
-#include <kdl/frames.hpp>
-#include <kdl/jntarray.hpp>
+#include <Eigen/Dense>
 
 namespace {
 
 constexpr double kDeg = M_PI / 180.0;
 
-gp_Trsf KdlFrameToGpTrsf(const KDL::Frame& f)
+// 将 Eigen 矩阵转换为 gp_Trsf
+gp_Trsf EigenMatrixToGpTrsf(const Eigen::Matrix4d& mat)
 {
-    gp_Trsf t;
-    t.SetValues(
-        f.M(0, 0), f.M(0, 1), f.M(0, 2), f.p.x(),
-        f.M(1, 0), f.M(1, 1), f.M(1, 2), f.p.y(),
-        f.M(2, 0), f.M(2, 1), f.M(2, 2), f.p.z()
+    gp_Trsf trsf;
+    trsf.SetValues(
+        mat(0, 0), mat(0, 1), mat(0, 2), mat(0, 3),
+        mat(1, 0), mat(1, 1), mat(1, 2), mat(1, 3),
+        mat(2, 0), mat(2, 1), mat(2, 2), mat(2, 3)
     );
-    return t;
+    return trsf;
 }
 
-KDL::Chain BuildChain(const RbRobot& robot)
+// 计算单个 DH 变换矩阵
+Eigen::Matrix4d ComputeDhMatrix(double theta_deg, double d, double a, double alpha_deg)
 {
-    KDL::Chain chain;
-    for (const RbJoint& j : robot.joints) {
-        // Craig 1989 DH convention: DH_Craig1989(a, alpha_rad, d, theta_offset_rad)
-        KDL::Frame f = KDL::Frame::DH_Craig1989(
-            j.a,
-            j.alpha_deg * kDeg,
-            j.d,
-            j.offset_deg * kDeg
-        );
-        chain.addSegment(KDL::Segment(
-            j.name,
-            KDL::Joint(KDL::Joint::RotZ),
-            f
-        ));
-    }
-    return chain;
+    double t = theta_deg * kDeg;
+    double al = alpha_deg * kDeg;
+    double ct = cos(t), st = sin(t);
+    double ca = cos(al), sa = sin(al);
+
+    Eigen::Matrix4d mat;
+    mat << 
+        ct,       -st,      0.0,   a,
+        st * ca,   ct * ca, -sa,  -d * sa,
+        st * sa,   ct * sa,  ca,   d * ca,
+        0.0,       0.0,      0.0,  1.0;
+    return mat;
 }
 
 }  // namespace
 
 std::vector<gp_Trsf> ComputeFkKdl(const RbRobot& robot, const double joint_angles[6])
 {
-    KDL::Chain chain = BuildChain(robot);
-    KDL::ChainFkSolverPos_recursive solver(chain);
-
     int n = static_cast<int>(robot.joints.size());
-    KDL::JntArray q(n);
-    for (int i = 0; i < n; ++i)
-        q(i) = (i < 6 ? joint_angles[i] : 0.0) * kDeg;
-
     std::vector<gp_Trsf> result(n);
-    for (int seg = 0; seg < n; ++seg) {
-        KDL::Frame frame;
-        solver.JntToCart(q, frame, seg + 1);
-        result[seg] = KdlFrameToGpTrsf(frame);
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+
+    for (int i = 0; i < n; ++i) {
+        const RbJoint& j = robot.joints[i];
+        double theta = j.offset_deg + (i < 6 ? joint_angles[i] : 0.0);
+        Eigen::Matrix4d dh = ComputeDhMatrix(theta, j.d, j.a, j.alpha_deg);
+
+        T *= dh;
+        result[i] = EigenMatrixToGpTrsf(T);
     }
+
     return result;
 }
