@@ -5,7 +5,6 @@ add_library(GrindingUI STATIC
     OcctViewWidget.cpp
 )
 
-target_compile_definitions(GrindingUI PRIVATE GRINDINGAPPLIB_EXPORTS)
 
 # Expose src/ui/; inherits src/, src/occ/, src/kdl/ from upstream deps
 target_include_directories(GrindingUI PUBLIC

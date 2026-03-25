@@ -26,7 +26,7 @@ find_package(OpenCASCADE REQUIRED)
 find_package(orocos_kdl REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-# ── Sub-modules (each becomes a STATIC library) ──────────────────
+# ── Sub-modules (STATIC libraries) ──────────────────────────────
 #   GrindingCore        src/
 #   GrindingOcc         src/occ/
 #   GrindingKinematics  src/kdl/
@@ -65,32 +65,20 @@ if(Qt5LinguistTools_FOUND)
     )
 endif()
 
-# ── GrindingAppLib (SHARED DLL) ──────────────────────────────────
-# Aggregates all four static modules + Qt resources.
-add_library(GrindingAppLib SHARED
+# ── GrindingApp (Executable) ─────────────────────────────────────
+add_executable(GrindingApp
     ${QM_FILES}
+    execute/main.cpp
     resources/resources.qrc
 )
 
-target_link_libraries(GrindingAppLib PUBLIC
+# Links all four static modules; PUBLIC deps propagate transitively
+target_link_libraries(GrindingApp PRIVATE
     GrindingCore
     GrindingOcc
     GrindingKinematics
     GrindingUI
 )
-
-set_target_properties(GrindingAppLib PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-)
-
-# ── GrindingApp (Executable) ─────────────────────────────────────
-add_executable(GrindingApp
-    execute/main.cpp
-)
-
-target_link_libraries(GrindingApp PRIVATE GrindingAppLib)
 
 set_target_properties(GrindingApp PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

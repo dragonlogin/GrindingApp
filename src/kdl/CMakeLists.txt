@@ -3,7 +3,6 @@ add_library(GrindingKinematics STATIC
     RobotKinematics.cpp
 )
 
-target_compile_definitions(GrindingKinematics PRIVATE GRINDINGAPPLIB_EXPORTS)
 
 # Expose src/kdl/; inherits src/ from GrindingCore
 target_include_directories(GrindingKinematics PUBLIC

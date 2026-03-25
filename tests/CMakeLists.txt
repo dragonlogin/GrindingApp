@@ -2,9 +2,10 @@ add_executable(TestRobotKinematics
     TestRobotKinematics.cpp
 )
 
-# GrindingAppLib already exposes all include dirs and link deps via PUBLIC
+# GrindingOcc and GrindingKinematics both transitively bring in GrindingCore
 target_link_libraries(TestRobotKinematics PRIVATE
-    GrindingAppLib
+    GrindingOcc
+    GrindingKinematics
     Qt5::Test
 )
 

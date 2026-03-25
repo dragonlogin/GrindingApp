@@ -7,7 +7,6 @@ add_library(GrindingOcc STATIC
     RobotDisplay.cpp
 )
 
-target_compile_definitions(GrindingOcc PRIVATE GRINDINGAPPLIB_EXPORTS)
 
 # Expose src/occ/; inherits src/ from GrindingCore
 target_include_directories(GrindingOcc PUBLIC

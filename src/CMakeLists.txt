@@ -4,7 +4,6 @@ add_library(GrindingCore STATIC
     RbXmlParser.cpp
 )
 
-target_compile_definitions(GrindingCore PRIVATE GRINDINGAPPLIB_EXPORTS)
 
 # Expose src/ so all consumers can #include "RbXmlParser.h" / "GrindingAppExport.h"
 target_include_directories(GrindingCore PUBLIC
