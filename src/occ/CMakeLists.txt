@@ -3,12 +3,15 @@ set(HEADERS
     StlLoader.h
     StepImporter.h
     RobotDisplay.h
+    Waypoint.h
+    SurfaceWaypointGen.h
 )
 
 set(SOURCES
     StlLoader.cpp
     StepImporter.cpp
     RobotDisplay.cpp
+    SurfaceWaypointGen.cpp
 )
 
 add_library(GrindingOcc SHARED ${HEADERS} ${SOURCES})

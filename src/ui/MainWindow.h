@@ -12,12 +12,15 @@
 #include <AIS_Trihedron.hxx>
 #include <AIS_Shape.hxx>
 #include <gp_Trsf.hxx>
+#include <TopoDS_Shape.hxx>
+#include <TopoDS_Face.hxx>
 
 #include <QUndoStack>
 
 #include "GrindingUIExport.h"
 #include "Q.h"
 #include "RbXmlParser.h"
+#include "Waypoint.h"
 
 namespace nl {
 namespace ui {
@@ -36,6 +39,7 @@ public:
 
 private slots:
     void OnImportWorkpiece();
+    void OnGenerateWaypoints();
     void OnViewFront();
     void OnViewTop();
     void OnViewSide();
@@ -80,6 +84,11 @@ private:
 
     int tcp_ref_mode_ = 0;  // 0=Flange, 1=Tool TCP
     std::vector<nl::utils::Q> current_ik_solutions_;
+
+    Handle(AIS_Shape)               workpiece_ais_;
+    TopoDS_Shape                    workpiece_shape_;
+    Handle(AIS_Shape)               waypoints_ais_;
+    std::vector<nl::occ::Waypoint>  waypoints_;
 };
 
 } // namespace ui

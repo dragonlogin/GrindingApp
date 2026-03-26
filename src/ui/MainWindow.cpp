@@ -30,8 +30,12 @@
 #include "RobotController.h"
 #include "Commands.h"
 #include "StepImporter.h"
+#include "SurfaceWaypointGen.h"
 #include "RobotKinematics.h"
 #include "RobotDisplay.h"
+
+#include <BRepBuilderAPI_MakePolygon.hxx>
+#include <Quantity_Color.hxx>
 
 using namespace nl::occ;
 
@@ -108,6 +112,8 @@ void MainWindow::SetupMenuBar()
         QKeySequence("Ctrl+T"));
     fileMenu->addAction(tr("Import Workpiece(&I)"), this,
         &MainWindow::OnImportWorkpiece, QKeySequence("Ctrl+O"));
+    fileMenu->addAction(tr("Generate Waypoints(&G)"), this,
+        &MainWindow::OnGenerateWaypoints, QKeySequence("Ctrl+G"));
     fileMenu->addSeparator();
     fileMenu->addAction(tr("Exit(&Q)"), qApp, &QApplication::quit,
         QKeySequence("Ctrl+Q"));
@@ -353,16 +359,21 @@ void MainWindow::OnSceneTreeContextMenu(const QPoint& pos)
 {
     QTreeWidgetItem* item = scene_tree_->itemAt(pos);
     if (!item) return;
-    if (item->data(0, Qt::UserRole).toString() != "joint") return;
 
-    int idx = item->data(0, Qt::UserRole + 1).toInt();
-
+    QString role = item->data(0, Qt::UserRole).toString();
     QMenu menu(this);
-    menu.addAction(tr("Toggle Frame Visibility"),
-                   [this, idx]() {
-        controller_->ToggleJointFrame(idx);
-    });
-    menu.exec(scene_tree_->mapToGlobal(pos));
+
+    if (role == "joint") {
+        int idx = item->data(0, Qt::UserRole + 1).toInt();
+        menu.addAction(tr("Toggle Frame Visibility"), [this, idx]() {
+            controller_->ToggleJointFrame(idx);
+        });
+    } else if (role == "workpiece") {
+        menu.addAction(tr("Generate Waypoints"), this, &MainWindow::OnGenerateWaypoints);
+    }
+
+    if (!menu.isEmpty())
+        menu.exec(scene_tree_->mapToGlobal(pos));
 }
 
 void MainWindow::OnLoadRobot()
@@ -399,15 +410,77 @@ void MainWindow::OnImportWorkpiece()
     if (path.isEmpty()) return;
 
     int face_count = 0;
-    auto shape = occ::StepImporter::Load(path.toStdString(), &face_count);
+    TopoDS_Shape shape = occ::StepImporter::Load(path.toStdString(), &face_count);
     if (shape.IsNull()) return;
 
-    Handle(AIS_Shape) ais_shape = new AIS_Shape(shape);
-    viewer_->Context()->Display(ais_shape, Standard_True);
+    // 移除旧工件和路径点
+    if (!workpiece_ais_.IsNull()) {
+        viewer_->Context()->Remove(workpiece_ais_, Standard_False);
+        workpiece_ais_.Nullify();
+    }
+    if (!waypoints_ais_.IsNull()) {
+        viewer_->Context()->Remove(waypoints_ais_, Standard_False);
+        waypoints_ais_.Nullify();
+        waypoints_.clear();
+    }
+
+    workpiece_shape_ = shape;
+    workpiece_ais_   = new AIS_Shape(shape);
+    viewer_->Context()->Display(workpiece_ais_, AIS_Shaded, 0, Standard_False);
+    viewer_->Context()->UpdateCurrentViewer();
     viewer_->View()->FitAll();
+
+    std::string file_name = QFileInfo(path).baseName().toStdString();
+    AddWorkpiece(file_name, "station");
 
     model_info_->setText(
         tr("File: %1 | Face: %2").arg(QFileInfo(path).fileName()).arg(face_count));
+}
+
+void MainWindow::OnGenerateWaypoints()
+{
+    if (workpiece_shape_.IsNull()) {
+        statusBar()->showMessage(tr("No workpiece loaded"), 3000);
+        return;
+    }
+
+    // 移除旧路径点显示
+    if (!waypoints_ais_.IsNull()) {
+        viewer_->Context()->Remove(waypoints_ais_, Standard_False);
+        waypoints_ais_.Nullify();
+        waypoints_.clear();
+    }
+
+    // 第一版：取面积最大的 Face，10x5 网格，贴面
+    TopoDS_Face face = occ::LargestFace(workpiece_shape_);
+    if (face.IsNull()) {
+        statusBar()->showMessage(tr("No valid face found"), 3000);
+        return;
+    }
+
+    waypoints_ = occ::GenerateGridWaypoints(face, 10, 5, 0.0);
+    if (waypoints_.empty()) {
+        statusBar()->showMessage(tr("Waypoint generation failed"), 3000);
+        return;
+    }
+
+    // 将路径点位置连成折线并显示
+    BRepBuilderAPI_MakePolygon poly;
+    for (const auto& wp : waypoints_) {
+        const gp_XYZ& t = wp.pose.TranslationPart();
+        poly.Add(gp_Pnt(t.X(), t.Y(), t.Z()));
+    }
+    if (poly.IsDone()) {
+        waypoints_ais_ = new AIS_Shape(poly.Shape());
+        waypoints_ais_->SetColor(Quantity_NOC_YELLOW);
+        waypoints_ais_->SetWidth(2.0);
+        viewer_->Context()->Display(waypoints_ais_, AIS_WireFrame, 0, Standard_False);
+        viewer_->Context()->UpdateCurrentViewer();
+    }
+
+    statusBar()->showMessage(
+        tr("Generated %1 waypoints on largest face").arg(static_cast<int>(waypoints_.size())),
+        5000);
 }
 
 void MainWindow::OnViewFront()
