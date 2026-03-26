@@ -16,11 +16,14 @@
 #include <TopoDS_Face.hxx>
 
 #include <QUndoStack>
+#include <memory>
 
 #include "GrindingUIExport.h"
 #include "Q.h"
 #include "RbXmlParser.h"
 #include "Waypoint.h"
+#include "IWaypointAlgo.h"
+#include "WaypointGenerator.h"
 
 namespace nl {
 namespace ui {
@@ -40,6 +43,11 @@ public:
 private slots:
     void OnImportWorkpiece();
     void OnGenerateWaypoints();
+    void OnClearWaypoints();
+    void OnSelectFaceMode();
+    void OnFacePicked();
+    void OnSetGridMode();
+    void OnSetPlanarMode();
     void OnViewFront();
     void OnViewTop();
     void OnViewSide();
@@ -73,6 +81,9 @@ private:
     void AddTool(const QString& name, const std::string& parent_role);
     void AddWorkpiece(const std::string& name, const std::string& parent_role);
 
+    void SetupWaypointMenu();
+    void DisplayWaypoints();
+
     QLabel*          model_info_;
     QLabel*          coord_label_;
     OcctViewWidget*  viewer_ = nullptr;
@@ -89,6 +100,18 @@ private:
     TopoDS_Shape                    workpiece_shape_;
     Handle(AIS_Shape)               waypoints_ais_;
     std::vector<nl::occ::Waypoint>  waypoints_;
+
+    // Surface picking
+    enum class SelectionMode { kNone, kSelectFace };
+    SelectionMode selection_mode_ = SelectionMode::kNone;
+    TopoDS_Face selected_face_;
+    Handle(AIS_Shape) selected_face_ais_;
+
+    // Waypoint generation
+    enum class WaypointMode { kGrid, kPlanarCut };
+    WaypointMode waypoint_mode_ = WaypointMode::kGrid;
+    std::unique_ptr<nl::occ::WaypointGenerator> waypoint_gen_;
+    nl::occ::WaypointConfig waypoint_config_;
 };
 
 } // namespace ui

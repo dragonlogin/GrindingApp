@@ -89,7 +89,13 @@ GrindingApp/
 │   │   ├── GrindingOccExport.h        # GRINDING_OCC_EXPORT 宏
 │   │   ├── StlLoader.h/cpp            # nl::occ::StlLoader：.stl → TopoDS_Shape
 │   │   ├── StepImporter.h/cpp         # nl::occ::StepImporter：.step → TopoDS_Shape
-│   │   └── RobotDisplay.h/cpp         # nl::occ：DhTrsf / RpyPosTrsf / ComputeFkHome
+│   │   ├── RobotDisplay.h/cpp         # nl::occ：DhTrsf / RpyPosTrsf / ComputeFkHome
+│   │   ├── Waypoint.h                 # nl::occ::Waypoint（路径点数据结构，全 inline）
+│   │   ├── IWaypointAlgo.h            # nl::occ::IWaypointAlgo 接口 + WaypointConfig
+│   │   ├── WaypointGenerator.h/cpp    # nl::occ::WaypointGenerator（Bridge 抽象层）
+│   │   ├── WaypointGridAlgo.h/cpp     # nl::occ::WaypointGridAlgo（UV 网格采样）
+│   │   ├── WaypointPlanarAlgo.h/cpp   # nl::occ::WaypointPlanarAlgo（平面切割采样）
+│   │   └── SurfaceWaypointGen.h/cpp   # nl::occ：LargestFace / GenerateGridWaypoints（旧版便捷函数）
 │   └── kinematics/
 │       ├── CMakeLists.txt             # GrindingKinematics (SHARED DLL)
 │       ├── GrindingKinematicsExport.h # GRINDING_KINEMATICS_EXPORT 宏
@@ -145,6 +151,12 @@ GrindingApp/
 | `StlLoader.h/cpp` | `nl::occ::StlLoader`：静态 `Load(path)` → `TopoDS_Shape` |
 | `StepImporter.h/cpp` | `nl::occ::StepImporter`：静态 `Load(path, face_count*)` → `TopoDS_Shape` |
 | `RobotDisplay.h/cpp` | `nl::occ`：`DhTrsf()`、`RpyPosTrsf(Vector3d)`、`ComputeFkHome()` |
+| `Waypoint.h` | `nl::occ::Waypoint`：路径点（`gp_Trsf pose` + `speed_ratio`） |
+| `IWaypointAlgo.h` | `nl::occ::IWaypointAlgo`：路径生成算法接口 + `WaypointConfig` |
+| `WaypointGenerator.h/cpp` | `nl::occ::WaypointGenerator`：Bridge 模式抽象层（SetFace + SetAlgorithm + Generate） |
+| `WaypointGridAlgo.h/cpp` | `nl::occ::WaypointGridAlgo`：UV 参数网格采样（蛇形遍历） |
+| `WaypointPlanarAlgo.h/cpp` | `nl::occ::WaypointPlanarAlgo`：平面切割采样（BRepAlgoAPI_Section） |
+| `SurfaceWaypointGen.h/cpp` | `nl::occ`：`LargestFace()` / `GenerateGridWaypoints()`（旧版便捷函数） |
 
 ### `src/kinematics/` — GrindingKinematics（运动学层）
 
@@ -237,6 +249,9 @@ RbXmlParser::Parse()          → RbRobot（DH参数 + STL路径）
 | 修改 3D 视口交互 | `src/ui/OcctViewWidget.cpp` |
 | 修改 STL 加载逻辑 | `src/occ/StlLoader.h/cpp` |
 | 添加新测试 | `tests/TestRobotKinematics.cpp` + `tests/CMakeLists.txt` |
+| 修改路径生成算法 | `src/occ/WaypointGridAlgo.cpp` 或 `WaypointPlanarAlgo.cpp` |
+| 新增路径生成算法 | 实现 `IWaypointAlgo` 接口，在 `MainWindow::OnGenerateWaypoints()` 中切换 |
+| 修改面选取交互 | `src/ui/MainWindow.cpp` → `OnFacePicked()` / `OnSelectFaceMode()` |
 | 新增 occ 模块功能 | `src/occ/` 下新建文件 + `src/occ/CMakeLists.txt` |
 | 新增运动学功能 | `src/kinematics/` 下新建文件 + `src/kinematics/CMakeLists.txt` |
 

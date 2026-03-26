@@ -45,6 +45,12 @@ void OcctViewWidget::mousePressEvent(QMouseEvent* e)
 
     if (e->button() == Qt::MidButton)
         panning_ = true;
+
+    if (e->button() == Qt::LeftButton) {
+        context_->MoveTo(e->pos().x(), e->pos().y(), view_, Standard_True);
+        context_->Select(Standard_True);
+        emit ShapeSelected();
+    }
 }
 
 void OcctViewWidget::mouseMoveEvent(QMouseEvent* e)
@@ -100,7 +106,7 @@ void OcctViewWidget::InitOcct()
     viewer_->SetLightOn();
 	// 灰色背景
     viewer_->SetDefaultBackgroundColor(
-        Quantity_Color(0.3, 0.3, 0.3, Quantity_TOC_RGB));
+        Quantity_Color(0.2, 0.2, 0.2, Quantity_TOC_RGB));
 
     // 3. View
     view_ = viewer_->CreateView();

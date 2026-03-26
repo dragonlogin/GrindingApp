@@ -14,6 +14,7 @@
 #include "GrindingUIExport.h"
 #include "Q.h"
 #include "RbXmlParser.h"
+#include "RobotDisplay.h"
 
 namespace nl {
 namespace ui {

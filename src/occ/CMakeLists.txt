@@ -4,6 +4,10 @@ set(HEADERS
     StepImporter.h
     RobotDisplay.h
     Waypoint.h
+    IWaypointAlgo.h
+    WaypointGridAlgo.h
+    WaypointPlanarAlgo.h
+    WaypointGenerator.h
     SurfaceWaypointGen.h
 )
 
@@ -11,6 +15,9 @@ set(SOURCES
     StlLoader.cpp
     StepImporter.cpp
     RobotDisplay.cpp
+    WaypointGridAlgo.cpp
+    WaypointPlanarAlgo.cpp
+    WaypointGenerator.cpp
     SurfaceWaypointGen.cpp
 )
 

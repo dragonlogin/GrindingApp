@@ -24,6 +24,10 @@
 #include <AIS_Shape.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <V3d_View.hxx>
+#include <StdSelect_BRepOwner.hxx>
+#include <TopAbs_ShapeEnum.hxx>
+#include <TopoDS.hxx>
+#include <QActionGroup>
 
 #include "OcctViewWidget.h"
 #include "JogPanel.h"
@@ -31,13 +35,19 @@
 #include "Commands.h"
 #include "StepImporter.h"
 #include "SurfaceWaypointGen.h"
+#include "WaypointGenerator.h"
+#include "WaypointGridAlgo.h"
+#include "WaypointPlanarAlgo.h"
 #include "RobotKinematics.h"
 #include "RobotDisplay.h"
 
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <Quantity_Color.hxx>
 
-using namespace nl::occ;
+using nl::occ::LargestFace;
+using nl::occ::StepImporter;
+using nl::occ::TrsfToRpyPos;
+using nl::occ::RpyPosTrsf;
 
 namespace nl {
 namespace ui {
@@ -93,6 +103,10 @@ MainWindow::MainWindow(QWidget* parent)
 
     SetupJogPanel();
     SetupSceneTree();
+    SetupWaypointMenu();
+
+    connect(viewer_, &OcctViewWidget::ShapeSelected,
+            this, &MainWindow::OnFacePicked);
 }
 
 void MainWindow::SwitchLanguage(const std::string& lang)
@@ -112,8 +126,6 @@ void MainWindow::SetupMenuBar()
         QKeySequence("Ctrl+T"));
     fileMenu->addAction(tr("Import Workpiece(&I)"), this,
         &MainWindow::OnImportWorkpiece, QKeySequence("Ctrl+O"));
-    fileMenu->addAction(tr("Generate Waypoints(&G)"), this,
-        &MainWindow::OnGenerateWaypoints, QKeySequence("Ctrl+G"));
     fileMenu->addSeparator();
     fileMenu->addAction(tr("Exit(&Q)"), qApp, &QApplication::quit,
         QKeySequence("Ctrl+Q"));
@@ -427,6 +439,7 @@ void MainWindow::OnImportWorkpiece()
     workpiece_shape_ = shape;
     workpiece_ais_   = new AIS_Shape(shape);
     viewer_->Context()->Display(workpiece_ais_, AIS_Shaded, 0, Standard_False);
+    viewer_->Context()->SetColor(workpiece_ais_, Quantity_NOC_GRAY89, Standard_False);
     viewer_->Context()->UpdateCurrentViewer();
     viewer_->View()->FitAll();
 
@@ -439,48 +452,37 @@ void MainWindow::OnImportWorkpiece()
 
 void MainWindow::OnGenerateWaypoints()
 {
-    if (workpiece_shape_.IsNull()) {
-        statusBar()->showMessage(tr("No workpiece loaded"), 3000);
+    if (selected_face_.IsNull()) {
+        QMessageBox::warning(this, tr("Warning"), tr("Please select a surface first"));
         return;
     }
 
-    // 移除旧路径点显示
+    // Remove old waypoints display
     if (!waypoints_ais_.IsNull()) {
         viewer_->Context()->Remove(waypoints_ais_, Standard_False);
         waypoints_ais_.Nullify();
         waypoints_.clear();
     }
 
-    // 第一版：取面积最大的 Face，10x5 网格，贴面
-    TopoDS_Face face = occ::LargestFace(workpiece_shape_);
-    if (face.IsNull()) {
-        statusBar()->showMessage(tr("No valid face found"), 3000);
-        return;
+    waypoint_gen_ = std::make_unique<nl::occ::WaypointGenerator>();
+    waypoint_gen_->SetFace(selected_face_);
+
+    if (waypoint_mode_ == WaypointMode::kGrid) {
+        waypoint_gen_->SetAlgorithm(std::make_unique<nl::occ::WaypointGridAlgo>());
+    } else {
+        waypoint_gen_->SetAlgorithm(std::make_unique<nl::occ::WaypointPlanarAlgo>());
     }
 
-    waypoints_ = occ::GenerateGridWaypoints(face, 10, 5, 0.0);
+    waypoints_ = waypoint_gen_->Generate(waypoint_config_);
+
     if (waypoints_.empty()) {
-        statusBar()->showMessage(tr("Waypoint generation failed"), 3000);
+        statusBar()->showMessage(tr("No waypoints generated for this surface"), 3000);
         return;
     }
 
-    // 将路径点位置连成折线并显示
-    BRepBuilderAPI_MakePolygon poly;
-    for (const auto& wp : waypoints_) {
-        const gp_XYZ& t = wp.pose.TranslationPart();
-        poly.Add(gp_Pnt(t.X(), t.Y(), t.Z()));
-    }
-    if (poly.IsDone()) {
-        waypoints_ais_ = new AIS_Shape(poly.Shape());
-        waypoints_ais_->SetColor(Quantity_NOC_YELLOW);
-        waypoints_ais_->SetWidth(2.0);
-        viewer_->Context()->Display(waypoints_ais_, AIS_WireFrame, 0, Standard_False);
-        viewer_->Context()->UpdateCurrentViewer();
-    }
-
+    DisplayWaypoints();
     statusBar()->showMessage(
-        tr("Generated %1 waypoints on largest face").arg(static_cast<int>(waypoints_.size())),
-        5000);
+        tr("%1 waypoints generated").arg(static_cast<int>(waypoints_.size())), 5000);
 }
 
 void MainWindow::OnViewFront()
@@ -520,6 +522,128 @@ void MainWindow::OnViewShaded()
 void MainWindow::OnFitAll()
 {
     viewer_->View()->FitAll();
+}
+
+void MainWindow::OnFacePicked()
+{
+    if (selection_mode_ != SelectionMode::kSelectFace)
+        return;
+
+    auto ctx = viewer_->Context();
+
+    for (ctx->InitSelected(); ctx->MoreSelected(); ctx->NextSelected()) {
+        Handle(StdSelect_BRepOwner) owner =
+            Handle(StdSelect_BRepOwner)::DownCast(ctx->SelectedOwner());
+
+        if (owner.IsNull() || owner->Shape().ShapeType() != TopAbs_FACE)
+            continue;
+
+        selected_face_ = TopoDS::Face(owner->Shape());
+
+        // Highlight selected face in yellow
+        if (!selected_face_ais_.IsNull()) {
+            ctx->Remove(selected_face_ais_, Standard_False);
+        }
+        selected_face_ais_ = new AIS_Shape(selected_face_);
+        ctx->Display(selected_face_ais_, AIS_Shaded, 0, Standard_False);
+        ctx->SetColor(selected_face_ais_, Quantity_NOC_CYAN1, Standard_False);
+        ctx->SetTransparency(selected_face_ais_, 0.4, Standard_False);
+        ctx->UpdateCurrentViewer();
+
+        // Restore default selection mode on workpiece
+        if (!workpiece_ais_.IsNull()) {
+            ctx->Deactivate(workpiece_ais_);
+            ctx->Activate(workpiece_ais_, 0);
+        }
+
+        selection_mode_ = SelectionMode::kNone;
+        statusBar()->showMessage(tr("Surface selected, ready to generate waypoints"));
+        return;
+    }
+
+    statusBar()->showMessage(tr("Please select a valid surface"), 3000);
+}
+
+void MainWindow::SetupWaypointMenu()
+{
+    QMenu* path_menu = menuBar()->addMenu(tr("Path(&P)"));
+
+    path_menu->addAction(tr("Select Face"), this, &MainWindow::OnSelectFaceMode);
+    path_menu->addSeparator();
+
+    // Generation Mode submenu with radio behavior
+    QMenu* mode_menu = path_menu->addMenu(tr("Generation Mode"));
+    auto* mode_group = new QActionGroup(this);
+
+    QAction* grid_action = mode_menu->addAction(tr("Grid"));
+    grid_action->setCheckable(true);
+    grid_action->setChecked(true);
+    mode_group->addAction(grid_action);
+    connect(grid_action, &QAction::triggered, this, &MainWindow::OnSetGridMode);
+
+    QAction* planar_action = mode_menu->addAction(tr("Planar Cut"));
+    planar_action->setCheckable(true);
+    mode_group->addAction(planar_action);
+    connect(planar_action, &QAction::triggered, this, &MainWindow::OnSetPlanarMode);
+
+    path_menu->addSeparator();
+    path_menu->addAction(tr("Generate Waypoints"), this,
+        &MainWindow::OnGenerateWaypoints, QKeySequence("Ctrl+G"));
+    path_menu->addAction(tr("Clear Waypoints"), this,
+        &MainWindow::OnClearWaypoints);
+}
+
+void MainWindow::OnClearWaypoints()
+{
+    if (waypoints_ais_)
+        viewer_->Context()->Remove(waypoints_ais_, Standard_False);
+    waypoints_.clear();
+    viewer_->Context()->UpdateCurrentViewer();
+}
+
+void MainWindow::OnSelectFaceMode()
+{
+    if (workpiece_shape_.IsNull()) {
+        statusBar()->showMessage(tr("No workpiece loaded"), 3000);
+        return;
+    }
+    // Activate face-level selection on workpiece
+    auto ctx = viewer_->Context();
+    if (!workpiece_ais_.IsNull()) {
+        ctx->Deactivate(workpiece_ais_);
+        ctx->Activate(workpiece_ais_, AIS_Shape::SelectionMode(TopAbs_FACE));
+    }
+    selection_mode_ = SelectionMode::kSelectFace;
+    statusBar()->showMessage(tr("Click on a surface to select it"));
+}
+
+void MainWindow::OnSetGridMode()
+{
+    waypoint_mode_ = WaypointMode::kGrid;
+}
+
+void MainWindow::OnSetPlanarMode()
+{
+    waypoint_mode_ = WaypointMode::kPlanarCut;
+}
+
+void MainWindow::DisplayWaypoints()
+{
+    if (waypoints_.empty())
+        return;
+
+    BRepBuilderAPI_MakePolygon poly;
+    for (const auto& wp : waypoints_) {
+        const gp_XYZ& t = wp.pose.TranslationPart();
+        poly.Add(gp_Pnt(t.X(), t.Y(), t.Z()));
+    }
+    if (poly.IsDone()) {
+        waypoints_ais_ = new AIS_Shape(poly.Shape());
+        waypoints_ais_->SetColor(Quantity_NOC_YELLOW);
+        waypoints_ais_->SetWidth(2.0);
+        viewer_->Context()->Display(waypoints_ais_, AIS_WireFrame, 0, Standard_False);
+        viewer_->Context()->UpdateCurrentViewer();
+    }
 }
 
 }
