@@ -1,6 +1,7 @@
 set(HEADERS
     GrindingUIExport.h
     Commands.h
+    TrajectoryPlanner.h
 )
 
 set(MOC_HEADER
@@ -8,6 +9,8 @@ set(MOC_HEADER
     OcctViewWidget.h
     JogPanel.h
     RobotController.h
+    TrajectoryPanel.h
+    TrajectoryPlayer.h
 )
 
 qt5_wrap_cpp(MOC_SOURCES ${MOC_HEADER})
@@ -17,6 +20,9 @@ set(SOURCES
     OcctViewWidget.cpp
     JogPanel.cpp
     RobotController.cpp
+    TrajectoryPlanner.cpp
+    TrajectoryPanel.cpp
+    TrajectoryPlayer.cpp
     Commands.cpp
     ${MOC_SOURCES}
 )

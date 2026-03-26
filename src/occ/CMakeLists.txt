@@ -8,6 +8,7 @@ set(HEADERS
     WaypointGridAlgo.h
     WaypointPlanarAlgo.h
     WaypointGenerator.h
+    Trajectory.h
     SurfaceWaypointGen.h
 )
 

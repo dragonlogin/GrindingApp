@@ -83,7 +83,10 @@ GrindingApp/
 │   │   ├── CMakeLists.txt             # GrindingUI (SHARED DLL)
 │   │   ├── GrindingUIExport.h         # GRINDING_UI_EXPORT 宏
 │   │   ├── MainWindow.h/cpp           # nl::ui::MainWindow：菜单、Jog面板、场景树
-│   │   └── OcctViewWidget.h/cpp       # nl::ui::OcctViewWidget：Qt 封装 OCCT V3d_View
+│   │   ├── OcctViewWidget.h/cpp       # nl::ui::OcctViewWidget：Qt 封装 OCCT V3d_View
+│   │   ├── TrajectoryPlanner.h/cpp    # nl::ui::TrajectoryPlanner（MoveJ/MoveL + IK 规划）
+│   │   ├── TrajectoryPanel.h/cpp      # nl::ui::TrajectoryPanel（轨迹编辑表格 Dock）
+│   │   └── TrajectoryPlayer.h/cpp     # nl::ui::TrajectoryPlayer（回放控制 Dock）
 │   ├── occ/
 │   │   ├── CMakeLists.txt             # GrindingOcc (SHARED DLL)
 │   │   ├── GrindingOccExport.h        # GRINDING_OCC_EXPORT 宏
@@ -95,6 +98,7 @@ GrindingApp/
 │   │   ├── WaypointGenerator.h/cpp    # nl::occ::WaypointGenerator（Bridge 抽象层）
 │   │   ├── WaypointGridAlgo.h/cpp     # nl::occ::WaypointGridAlgo（UV 网格采样）
 │   │   ├── WaypointPlanarAlgo.h/cpp   # nl::occ::WaypointPlanarAlgo（平面切割采样）
+│   │   ├── Trajectory.h               # nl::occ::Trajectory / TrajectoryPoint（轨迹数据结构）
 │   │   └── SurfaceWaypointGen.h/cpp   # nl::occ：LargestFace / GenerateGridWaypoints（旧版便捷函数）
 │   └── kinematics/
 │       ├── CMakeLists.txt             # GrindingKinematics (SHARED DLL)
@@ -143,6 +147,9 @@ GrindingApp/
 |---|---|
 | `MainWindow.h/cpp` | `nl::ui::MainWindow`：UI 组装、场景树、Jog 面板、机器人/工具/工件加载 |
 | `OcctViewWidget.h/cpp` | `nl::ui::OcctViewWidget`：封装 OCCT 3D 视口，暴露 `Context()` / `View()` |
+| `TrajectoryPlanner.h/cpp` | `nl::ui::TrajectoryPlanner`：MoveJ/MoveL 插值 + IK 求解 + 异常检测 |
+| `TrajectoryPanel.h/cpp` | `nl::ui::TrajectoryPanel`：右侧 Dock 轨迹编辑表格 + IK 选解 |
+| `TrajectoryPlayer.h/cpp` | `nl::ui::TrajectoryPlayer`：底部 Dock 回放控制（播放/暂停/停止/进度/速度） |
 
 ### `src/occ/` — GrindingOcc（OpenCASCADE 操作层）
 
@@ -156,6 +163,7 @@ GrindingApp/
 | `WaypointGenerator.h/cpp` | `nl::occ::WaypointGenerator`：Bridge 模式抽象层（SetFace + SetAlgorithm + Generate） |
 | `WaypointGridAlgo.h/cpp` | `nl::occ::WaypointGridAlgo`：UV 参数网格采样（蛇形遍历） |
 | `WaypointPlanarAlgo.h/cpp` | `nl::occ::WaypointPlanarAlgo`：平面切割采样（BRepAlgoAPI_Section） |
+| `Trajectory.h` | `nl::occ::Trajectory` / `TrajectoryPoint`：轨迹数据结构（MoveType + Status + joint_angles） |
 | `SurfaceWaypointGen.h/cpp` | `nl::occ`：`LargestFace()` / `GenerateGridWaypoints()`（旧版便捷函数） |
 
 ### `src/kinematics/` — GrindingKinematics（运动学层）
@@ -252,6 +260,9 @@ RbXmlParser::Parse()          → RbRobot（DH参数 + STL路径）
 | 修改路径生成算法 | `src/occ/WaypointGridAlgo.cpp` 或 `WaypointPlanarAlgo.cpp` |
 | 新增路径生成算法 | 实现 `IWaypointAlgo` 接口，在 `MainWindow::OnGenerateWaypoints()` 中切换 |
 | 修改面选取交互 | `src/ui/MainWindow.cpp` → `OnFacePicked()` / `OnSelectFaceMode()` |
+| 修改轨迹规划逻辑 | `src/ui/TrajectoryPlanner.cpp` → `Plan()` / `InterpolateMoveL()` |
+| 修改轨迹回放 | `src/ui/TrajectoryPlayer.cpp` + `MainWindow::OnPlaybackFrame()` |
+| 修改轨迹编辑表格 | `src/ui/TrajectoryPanel.cpp` |
 | 新增 occ 模块功能 | `src/occ/` 下新建文件 + `src/occ/CMakeLists.txt` |
 | 新增运动学功能 | `src/kinematics/` 下新建文件 + `src/kinematics/CMakeLists.txt` |
 

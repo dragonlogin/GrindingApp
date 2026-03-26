@@ -24,6 +24,8 @@
 #include "Waypoint.h"
 #include "IWaypointAlgo.h"
 #include "WaypointGenerator.h"
+#include "Trajectory.h"
+#include "TrajectoryPlanner.h"
 
 namespace nl {
 namespace ui {
@@ -31,6 +33,8 @@ namespace ui {
 class OcctViewWidget;
 class JogPanel;
 class RobotController;
+class TrajectoryPanel;
+class TrajectoryPlayer;
 
 class GRINDING_UI_EXPORT MainWindow : public QMainWindow
 {
@@ -84,6 +88,15 @@ private:
     void SetupWaypointMenu();
     void DisplayWaypoints();
 
+    void SetupTrajectoryPanel();
+    void SetupTrajectoryPlayer();
+    void OnPlanTrajectory(double approach_dist);
+    void OnTrajectoryPointSelected(int index);
+    void OnIkSolutionChanged(int point_index, int solution_index);
+    void OnPlaybackFrame(int index);
+    void OnPlaybackFinished();
+    void OnClearTrajectory();
+
     QLabel*          model_info_;
     QLabel*          coord_label_;
     OcctViewWidget*  viewer_ = nullptr;
@@ -112,6 +125,12 @@ private:
     WaypointMode waypoint_mode_ = WaypointMode::kGrid;
     std::unique_ptr<nl::occ::WaypointGenerator> waypoint_gen_;
     nl::occ::WaypointConfig waypoint_config_;
+
+    // Trajectory
+    TrajectoryPanel*  traj_panel_ = nullptr;
+    TrajectoryPlayer* traj_player_ = nullptr;
+    nl::occ::Trajectory trajectory_;
+    TrajectoryPlanner::Config planner_config_;
 };
 
 } // namespace ui

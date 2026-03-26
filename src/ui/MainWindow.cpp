@@ -40,6 +40,8 @@
 #include "WaypointPlanarAlgo.h"
 #include "RobotKinematics.h"
 #include "RobotDisplay.h"
+#include "TrajectoryPanel.h"
+#include "TrajectoryPlayer.h"
 
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <Quantity_Color.hxx>
@@ -104,6 +106,8 @@ MainWindow::MainWindow(QWidget* parent)
     SetupJogPanel();
     SetupSceneTree();
     SetupWaypointMenu();
+    SetupTrajectoryPanel();
+    SetupTrajectoryPlayer();
 
     connect(viewer_, &OcctViewWidget::ShapeSelected,
             this, &MainWindow::OnFacePicked);
@@ -591,6 +595,12 @@ void MainWindow::SetupWaypointMenu()
         &MainWindow::OnGenerateWaypoints, QKeySequence("Ctrl+G"));
     path_menu->addAction(tr("Clear Waypoints"), this,
         &MainWindow::OnClearWaypoints);
+    path_menu->addSeparator();
+    path_menu->addAction(tr("Plan Trajectory"), this, [this]() {
+        OnPlanTrajectory(planner_config_.approach_dist);
+    }, QKeySequence("Ctrl+P"));
+    path_menu->addAction(tr("Clear Trajectory"), this,
+        &MainWindow::OnClearTrajectory);
 }
 
 void MainWindow::OnClearWaypoints()
@@ -644,6 +654,115 @@ void MainWindow::DisplayWaypoints()
         viewer_->Context()->Display(waypoints_ais_, AIS_WireFrame, 0, Standard_False);
         viewer_->Context()->UpdateCurrentViewer();
     }
+}
+
+void MainWindow::SetupTrajectoryPanel()
+{
+    traj_panel_ = new TrajectoryPanel(this);
+    addDockWidget(Qt::RightDockWidgetArea, traj_panel_);
+
+    connect(traj_panel_, &TrajectoryPanel::PlanRequested,
+            this, &MainWindow::OnPlanTrajectory);
+    connect(traj_panel_, &TrajectoryPanel::PointSelected,
+            this, &MainWindow::OnTrajectoryPointSelected);
+    connect(traj_panel_, &TrajectoryPanel::IkSolutionChanged,
+            this, &MainWindow::OnIkSolutionChanged);
+}
+
+void MainWindow::SetupTrajectoryPlayer()
+{
+    traj_player_ = new TrajectoryPlayer(this);
+    addDockWidget(Qt::BottomDockWidgetArea, traj_player_);
+
+    connect(traj_player_, &TrajectoryPlayer::FrameChanged,
+            this, &MainWindow::OnPlaybackFrame);
+    connect(traj_player_, &TrajectoryPlayer::PlaybackFinished,
+            this, &MainWindow::OnPlaybackFinished);
+}
+
+void MainWindow::OnPlanTrajectory(double approach_dist)
+{
+    if (waypoints_.empty()) {
+        QMessageBox::warning(this, tr("Warning"),
+            tr("Generate waypoints first"));
+        return;
+    }
+
+    planner_config_.approach_dist = approach_dist;
+
+    TrajectoryPlanner planner;
+    trajectory_ = planner.Plan(
+        waypoints_,
+        controller_->GetRobot(),
+        controller_->GetJointAngles(),
+        planner_config_);
+
+    traj_panel_->SetTrajectory(trajectory_);
+    traj_player_->SetFrameCount(
+        static_cast<int>(trajectory_.points.size()));
+
+    if (trajectory_.HasErrors()) {
+        statusBar()->showMessage(
+            tr("Trajectory planned with %1 errors")
+                .arg(trajectory_.ErrorCount()), 5000);
+    } else {
+        statusBar()->showMessage(
+            tr("Trajectory planned: %1 points, ready to play")
+                .arg(static_cast<int>(trajectory_.points.size())), 5000);
+    }
+}
+
+void MainWindow::OnTrajectoryPointSelected(int index)
+{
+    if (index < 0 || index >= static_cast<int>(trajectory_.points.size()))
+        return;
+
+    const auto& pt = trajectory_.points[index];
+    if (pt.status != nl::occ::TrajectoryPoint::Status::kIkFailed) {
+        controller_->SetJointAngles(pt.joint_angles);
+    }
+
+    // Show IK alternatives for this point
+    std::vector<nl::utils::Q> solutions;
+    nl::kinematics::ComputeIkAllSolutions(
+        controller_->GetRobot(), pt.tcp_pose,
+        pt.joint_angles, solutions);
+    traj_panel_->SetIkSolutions(solutions);
+}
+
+void MainWindow::OnIkSolutionChanged(int point_index, int solution_index)
+{
+    TrajectoryPlanner planner;
+    if (planner.ResolveSinglePoint(trajectory_, point_index,
+                                    controller_->GetRobot(), solution_index)) {
+        traj_panel_->UpdatePoint(point_index, trajectory_.points[point_index]);
+        controller_->SetJointAngles(trajectory_.points[point_index].joint_angles);
+    }
+}
+
+void MainWindow::OnPlaybackFrame(int index)
+{
+    if (index < 0 || index >= static_cast<int>(trajectory_.points.size()))
+        return;
+
+    const auto& pt = trajectory_.points[index];
+    if (pt.status == nl::occ::TrajectoryPoint::Status::kIkFailed)
+        return;
+
+    controller_->SetJointAngles(pt.joint_angles);
+}
+
+void MainWindow::OnPlaybackFinished()
+{
+    statusBar()->showMessage(tr("Playback finished"), 3000);
+}
+
+void MainWindow::OnClearTrajectory()
+{
+    trajectory_.points.clear();
+    traj_panel_->Clear();
+    traj_player_->SetFrameCount(0);
+    statusBar()->showMessage(tr("Trajectory cleared"), 3000);
 }
 
 }
