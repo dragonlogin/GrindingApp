@@ -1,119 +1,44 @@
-# 项目开发规范
+# GrindingApp 开发规范
 
-## 1. 代码风格 (Google C++ Style)
+## 构建命令
 
-### 命名规范
-- 变量名使用 `snake_case`（如 `frame_count`）
-- 函数名使用 `CamelCase`（如 `GetFrameCount`）
-- 类名使用 `PascalCase`
-- 私有成员变量加下划线后缀（如 `member_variable_`）
-
-### 格式化
-- 缩进使用 4 个空格，禁止使用 Tab
-- 禁止使用 `using namespace`
-- namespace 内的代码不要缩进
-
-### 头文件规范
-- 使用 `#define` 保护（Header Guards），格式为 `PROJECT_PATH_FILE_H_`
-- 非必要尽量不要在头文件中包含头文件
-- **第一优先：前置声明** — 只用到指针或引用时，禁止 `#include`，改用前置声明：
-  ```cpp
-  // ✅
-  class Bar;
-  class Foo { Bar* bar_; };
-
-  // ❌ 禁止
-  #include "bar.h"
-  class Foo { Bar* bar_; };
-  ```
-- **第二优先：struct Rep（Pimpl）** — 必须按值持有第三方类型时，用 `struct Rep` 把实现隔离到 CPP：
-  ```cpp
-  // foo.h ✅
-  struct Rep;
-  class Foo { Rep* rep_; };
-
-  // foo.cpp
-  #include "third_party.h"
-  struct Rep { ThirdParty obj; };
-  ```
-- **禁止**直接在头文件 `#include` 第三方库头文件，除非该类型出现在公开接口的参数或返回值中
-- 头文件的包含顺序：当前 CPP 头文件 → 三方库头文件 → 非本文件夹头文件 → 本文件头文件
-
----
-
-## 2. 数据结构要求 (Raw Structures)
-
-### 数据结构（强制）
-
-非 Qt 信号槽代码中，**禁止**使用以下类型：
-- `QList` → 改用 `std::vector`
-- `QVector` → 改用 `std::vector`  
-- `QString` → 改用 `std::string`
-- `QVariant` → 改用具体类型或 `std::any`
-- `QMap` → 改用 `std::map` / `std::unordered_map`
-
-允许例外：`connect()` 的信号槽参数、`QObject` 子类的 `Q_PROPERTY`
-
-生成代码前先判断：这个函数是否直接服务于信号槽？否则一律用 std 类型。
-
-**禁止过度封装**：避免不必要的复杂对象包装，保持内存布局透明。
-
----
-
-## 3. 单元测试要求 (Unit Testing)
-
-- **强制测试**：每次修改类实现后，必须同步更新或创建对应的单元测试文件, 测试文件名与类名相同，后缀为 `_test.cpp`, 例如 `RobotKinematics.cpp` 对应 `TestRobotKinematics.cpp`,单独写cmakeLists.txt文件添加测试
-- **框架**：使用 Qt Test 框架（QTest）
-- **CMake 集成**：自动在 `CMakeLists.txt` 中添加 `add_test` 和 `target_link_libraries(xxx Qt6::Test)`
-
----
-
-## 4. CMakeLists.txt 格式规范
-
-### 源文件声明（强制）
-
-`.h` 和 `.cpp` 分开用 `set()` 声明，再统一传给 `add_library` / `add_executable`：
-
-```cmake
-# ✅ 正确
-set(HEADERS
-    Foo.h
-    Bar.h
-)
-
-set(SOURCES
-    Foo.cpp
-    Bar.cpp
-)
-
-add_library(MyLib SHARED ${HEADERS} ${SOURCES})
-
-# ❌ 禁止：直接在 add_library 里写文件列表
-add_library(MyLib SHARED Foo.h Foo.cpp Bar.h Bar.cpp)
+```bash
+"D:/Program Files/Microsoft Visual Studio/2022/Professional/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" --build build --config Release
+cd build && "D:/Program Files/Microsoft Visual Studio/2022/Professional/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/ctest.exe" --output-on-failure -C Release
 ```
 
-- 变量名：头文件用 `HEADERS`，源文件用 `SOURCES`
-- `HEADERS` 列在 `add_library` / `add_executable` 中，便于 IDE 分组显示
+修改代码后必须自主执行编译+测试。测试失败直接修复，不要停下来询问。
 
----
+## 规范索引
 
-## 5. 文档同步（强制）
+详细规范按需读取，在 `.claude/rules/` 目录下：
 
-每次发生以下任意情况时，必须同步更新 `architecture.md`：
-- 新增或删除源文件（`.h` / `.cpp`）
-- 新增或删除 CMake 目标（库、可执行文件）
-- 调整目录结构（移动文件、新建文件夹）
-- 修改模块间依赖关系
+| 文件 | 何时读取 |
+|---|---|
+| `naming.md` | 写任何代码时 |
+| `formatting.md` | 写任何代码时 |
+| `namespaces.md` | 新增类、跨模块引用时 |
+| `headers.md` | 新增/修改 `.h` 文件时 |
+| `data-types.md` | 选择容器/字符串类型时 |
+| `dll-export.md` | 新增导出类/函数时 |
+| `signal-slot.md` | 写 Qt 信号槽代码时 |
+| `cmake-format.md` | 修改 CMakeLists.txt 时 |
+| `testing.md` | 写/改测试时 |
+| `doc-sync.md` | 新增/删除文件、改目录结构时 |
 
-更新内容包括：目录结构、构建产物表、模块职责表、任务速查表（如有变化）。
+## Agent 角色索引
 
----
+复杂任务时按需读取 `.claude/agents/` 下的角色定义：
 
-## 6. 自动工作流
-
-修改代码后，必须自主执行以下命令序列：
-
-1. `cmake --build ${BUILD_DIR} --config Release`（编译，`${BUILD_DIR}` 为实际构建目录，请按项目修改，默认为 `build`）
-2. `ctest --output-on-failure`（测试）
-
-如果测试失败，直接读取错误日志并原地修复代码，不要停下来询问。
+| 文件 | 角色 |
+|---|---|
+| `architect.md` | 架构师 — 需求分析、方案设计 |
+| `ui.md` | UI — Qt 布局、交互 |
+| `algorithm.md` | 算法 — FK/IK、路径规划 |
+| `occ.md` | 3D — OCCT 几何、场景 |
+| `core.md` | 数据 — 模型解析、工具类 |
+| `test.md` | 测试 — 编写运行测试 |
+| `build.md` | 构建 — CMake、编译 |
+| `review.md` | 审查 — 代码质量检查 |
+| `doc.md` | 文档 — architecture.md |
+| `workflow.md` | 协作流程图 |
