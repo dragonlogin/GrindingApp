@@ -27,6 +27,13 @@ GRINDING_KINEMATICS_EXPORT bool ComputeIk(
     const nl::core::RbRobot& robot, const gp_Trsf& target,
     const nl::utils::Q& init_angles, nl::utils::Q& out_angles);
 
+// Compute all IK solutions (up to 8 for spherical wrist robots).
+// Solutions are sorted by joint-space distance to init_angles.
+// Returns true if at least one solution was found.
+GRINDING_KINEMATICS_EXPORT bool ComputeIkAllSolutions(
+    const nl::core::RbRobot& robot, const gp_Trsf& target,
+    const nl::utils::Q& init_angles, std::vector<nl::utils::Q>& solutions);
+
 } // namespace kinematics
 } // namespace nl
 

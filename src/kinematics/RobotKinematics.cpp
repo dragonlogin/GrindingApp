@@ -219,46 +219,43 @@ IRB140 球型腕解耦法：
 jog角	θ_jog = θ_actual - offset
 
 */
-bool AnalyticalIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
-                  const nl::utils::Q& init_angles, nl::utils::Q& out_angles)
+// Gather all analytical IK solutions (up to 8).
+// Returns solutions sorted by joint-space distance to init_angles.
+bool AnalyticalIkAll(const nl::core::RbRobot& robot, const gp_Trsf& target,
+                     const nl::utils::Q& init_angles,
+                     std::vector<nl::utils::Q>& out_solutions)
 {
     int n = static_cast<int>(robot.joints.size());
     if (n != 6) return false;
 
-    // DH parameters
-    double a1 = robot.joints[0].a;    // 70
-    double d1 = robot.joints[0].d;    // 352
-    double a2 = robot.joints[1].a;    // 360
-    double d4 = robot.joints[3].d;    // 380
-    double d6 = robot.joints[5].d;    // 65
+    double a1 = robot.joints[0].a;
+    double d1 = robot.joints[0].d;
+    double a2 = robot.joints[1].a;
+    double d4 = robot.joints[3].d;
+    double d6 = robot.joints[5].d;
 
     Eigen::Matrix4d T_target = GpTrsfToEigen(target);
     Eigen::Vector3d p_06 = T_target.block<3,1>(0, 3);
     Eigen::Matrix3d R_06 = T_target.block<3,3>(0, 0);
 
-    // --- Step 1: Wrist center ---
     Eigen::Vector3d p_wc = p_06 - d6 * R_06.col(2);
     double wx = p_wc(0), wy = p_wc(1), wz = p_wc(2);
 
-    // --- Step 2: θ1 candidates (2 solutions) ---
     double theta1_deg[2];
     theta1_deg[0] = atan2(wy, wx) / kDeg;
     theta1_deg[1] = NormalizeDeg(theta1_deg[0] + 180.0);
 
-    struct Solution { nl::utils::Q q; };
-    std::vector<Solution> solutions;
+    out_solutions.clear();
 
     for (int i1 = 0; i1 < 2; ++i1) {
         double t1 = theta1_deg[i1] * kDeg;
         double c1 = cos(t1), s1 = sin(t1);
 
-        // Wrist center in arm plane
         double r_wc = c1 * wx + s1 * wy;
         double m = r_wc - a1;
         double nv = d1 - wz;
         double D2 = m * m + nv * nv;
 
-        // --- Step 3: θ3_act (2 solutions: elbow up/down) ---
         double sin_t3 = (D2 - a2 * a2 - d4 * d4) / (2.0 * a2 * d4);
         if (sin_t3 < -1.0 - 1e-9 || sin_t3 > 1.0 + 1e-9) continue;
         sin_t3 = std::clamp(sin_t3, -1.0, 1.0);
@@ -273,7 +270,6 @@ bool AnalyticalIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
             double t3 = theta3_act_rad[i3];
             double ct3 = cos(t3), st3 = sin(t3);
 
-            // --- Step 4: θ2_act ---
             double A = a2 + d4 * st3;
             double B = d4 * ct3;
             double denom = A * A + B * B;
@@ -283,28 +279,19 @@ bool AnalyticalIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
             double st2 = (A * nv + B * m) / denom;
             double t2 = atan2(st2, ct2);
 
-            // --- Step 5: Compute R_03 from DH ---
             Eigen::Matrix3d R_01 = DhRotation(t1, robot.joints[0].alpha_deg);
             Eigen::Matrix3d R_12 = DhRotation(t2, robot.joints[1].alpha_deg);
             Eigen::Matrix3d R_23 = DhRotation(t3, robot.joints[2].alpha_deg);
             Eigen::Matrix3d R_03 = R_01 * R_12 * R_23;
 
-            // --- Step 6: R_36 = R_03^T * R_06 ---
             Eigen::Matrix3d R_36 = R_03.transpose() * R_06;
 
-            // Extract θ4, θ5, θ6 from R_36:
-            // R_36[2][2] = cos(θ5)
-            // R_36[0][2] = cos(θ4)*sin(θ5)
-            // R_36[1][2] = sin(θ4)*sin(θ5)
-            // R_36[2][0] = -sin(θ5)*cos(θ6)
-            // R_36[2][1] =  sin(θ5)*sin(θ6)
             double r13 = R_36(0, 2);
             double r23 = R_36(1, 2);
             double r33 = R_36(2, 2);
             double r31 = R_36(2, 0);
             double r32 = R_36(2, 1);
 
-            // θ5 has 2 solutions (±sin)
             for (int i5 = 0; i5 < 2; ++i5) {
                 double sign5 = (i5 == 0) ? 1.0 : -1.0;
                 double s5 = sign5 * sqrt(r13 * r13 + r23 * r23);
@@ -315,7 +302,6 @@ bool AnalyticalIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
                     t4 = atan2(sign5 * r23, sign5 * r13);
                     t6 = atan2(sign5 * r32, -sign5 * r31);
                 } else {
-                    // Wrist singularity: keep θ4 from init
                     t4 = (init_angles[3] + robot.joints[3].offset_deg) * kDeg;
                     if (r33 > 0) {
                         double sum46 = atan2(R_36(1, 0), R_36(0, 0));
@@ -326,7 +312,6 @@ bool AnalyticalIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
                     }
                 }
 
-                // Convert DH actual angles to jog angles
                 nl::utils::Q sol({
                     theta1_deg[i1] - robot.joints[0].offset_deg,
                     t2 / kDeg      - robot.joints[1].offset_deg,
@@ -339,28 +324,31 @@ bool AnalyticalIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
                 for (int j = 0; j < 6; ++j)
                     sol[j] = NormalizeDeg(sol[j]);
 
-                solutions.push_back({sol});
+                out_solutions.push_back(sol);
             }
         }
     }
 
-    if (solutions.empty()) {
+    if (out_solutions.empty()) return false;
+
+    // Sort by distance to init_angles (closest first)
+    std::sort(out_solutions.begin(), out_solutions.end(),
+        [&](const nl::utils::Q& a, const nl::utils::Q& b) {
+            return JointDistance(a, init_angles) < JointDistance(b, init_angles);
+        });
+
+    return true;
+}
+
+bool AnalyticalIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
+                  const nl::utils::Q& init_angles, nl::utils::Q& out_angles)
+{
+    std::vector<nl::utils::Q> solutions;
+    if (!AnalyticalIkAll(robot, target, init_angles, solutions)) {
         out_angles = init_angles;
         return false;
     }
-
-    // Pick closest to init
-    double best_dist = 1e30;
-    int best_idx = 0;
-    for (size_t i = 0; i < solutions.size(); ++i) {
-        double d = JointDistance(solutions[i].q, init_angles);
-        if (d < best_dist) {
-            best_dist = d;
-            best_idx = static_cast<int>(i);
-        }
-    }
-
-    out_angles = solutions[best_idx].q;
+    out_angles = solutions[0];
     return true;
 }
 
@@ -392,8 +380,25 @@ bool ComputeIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
         if (AnalyticalIk(robot, target, init_angles, out_angles))
             return true;
     }
-    // Fallback
     return JacobianIk(robot, target, init_angles, out_angles);
+}
+
+bool ComputeIkAllSolutions(const nl::core::RbRobot& robot, const gp_Trsf& target,
+                            const nl::utils::Q& init_angles,
+                            std::vector<nl::utils::Q>& solutions)
+{
+    if (IsSphericalWrist(robot)) {
+        if (AnalyticalIkAll(robot, target, init_angles, solutions))
+            return true;
+    }
+    // Jacobian fallback: single solution
+    nl::utils::Q sol(6, 0.0);
+    if (JacobianIk(robot, target, init_angles, sol)) {
+        solutions.clear();
+        solutions.push_back(sol);
+        return true;
+    }
+    return false;
 }
 
 } // namespace kinematics

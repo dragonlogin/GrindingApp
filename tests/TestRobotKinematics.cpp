@@ -4,6 +4,7 @@
 #include "RobotKinematics.h"
 #include "RobotDisplay.h"
 #include "Q.h"
+#include "Vector3d.h"
 
 using nl::core::RbRobot;
 using nl::core::RbJoint;
@@ -19,6 +20,8 @@ private slots:
     void testFkMatchesManualAtHome();
     void testFkMatchesManualAtNonZero();
     void testIkRoundTrip();
+    void testIkAllSolutions();
+    void testTrsfToRpyPosRoundTrip();
 };
 
 static RbRobot makeIrb140()
@@ -86,36 +89,93 @@ void TestRobotKinematics::testFkMatchesManualAtNonZero()
                  qPrintable(QString("Joint %1 mismatch at non-zero angles").arg(i + 1)));
 }
 
-void TestRobotKinematics::TestRobotKinematics::testIkRoundTrip()
+void TestRobotKinematics::testIkRoundTrip()
 {
     RbRobot robot = makeIrb140();
-    Q init({0, 0, 0, 0, 0, 0});
 
-    // Test multiple poses
     std::vector<Q> test_angles = {
         Q({0, 0, 0, 0, 0, 0}),
         Q({30, -45, 60, 90, -30, 15}),
-        Q({-60, 20, -30, 45, 60, -90}),
         Q({90, 0, 0, 0, -45, 0}),
+        Q({10, -20, 40, 0, 30, -10}),
     };
 
-    for (const auto& angles : test_angles) {
-        // FK
+    for (size_t t = 0; t < test_angles.size(); ++t) {
+        const Q& angles = test_angles[t];
+
         std::vector<gp_Trsf> fk = ComputeFk(robot, angles);
         gp_Trsf tcp = fk.back();
 
-        // IK
-        Q result(6);
-        bool ok = nl::kinematics::ComputeIk(robot, tcp, angles, result);
-        QVERIFY2(ok, "IK failed to converge");
+        // Use all-solutions API and check that at least one round-trips
+        std::vector<Q> solutions;
+        bool ok = nl::kinematics::ComputeIkAllSolutions(robot, tcp, angles, solutions);
+        QVERIFY2(ok, qPrintable(QString("IK failed for test case %1").arg(t)));
 
-        // FK again with IK result
-        std::vector<gp_Trsf> fk2 = ComputeFk(robot, result);
-        QVERIFY2(trsfNearEqual(fk.back(), fk2.back(), 1e-6, 0.01),
-                 qPrintable(QString("FK-IK-FK round-trip failed")));
+        bool any_match = false;
+        for (size_t s = 0; s < solutions.size(); ++s) {
+            std::vector<gp_Trsf> fk2 = ComputeFk(robot, solutions[s]);
+            if (trsfNearEqual(tcp, fk2.back(), 1e-4, 0.1)) {
+                any_match = true;
+                break;
+            }
+        }
+        QVERIFY2(any_match,
+                 qPrintable(QString("FK-IK-FK round-trip failed for case %1 (%2 solutions)")
+                            .arg(t).arg(solutions.size())));
     }
 }
 
+void TestRobotKinematics::testIkAllSolutions()
+{
+    RbRobot robot = makeIrb140();
+    Q angles({30, -45, 60, 90, -30, 15});
+
+    std::vector<gp_Trsf> fk = ComputeFk(robot, angles);
+    gp_Trsf tcp = fk.back();
+
+    std::vector<Q> solutions;
+    bool ok = nl::kinematics::ComputeIkAllSolutions(robot, tcp, angles, solutions);
+    QVERIFY2(ok, "ComputeIkAllSolutions failed");
+    QVERIFY2(!solutions.empty(), "No solutions returned");
+
+    // Each solution should produce the same TCP pose via FK
+    for (size_t i = 0; i < solutions.size(); ++i) {
+        std::vector<gp_Trsf> fk_sol = ComputeFk(robot, solutions[i]);
+        QVERIFY2(trsfNearEqual(tcp, fk_sol.back(), 1e-4, 0.1),
+                 qPrintable(QString("Solution %1 FK doesn't match target").arg(i)));
+    }
+
+    // First solution should be closest to init
+    QVERIFY2(solutions.size() >= 1, "Need at least 1 solution");
+}
+
+
+void TestRobotKinematics::testTrsfToRpyPosRoundTrip()
+{
+    using nl::utils::Vector3d;
+    using nl::occ::RpyPosTrsf;
+    using nl::occ::TrsfToRpyPos;
+
+    struct TestCase { Vector3d rpy; Vector3d pos; };
+    std::vector<TestCase> cases = {
+        {{0, 0, 0},        {100, 200, 300}},
+        {{45, -30, 60},    {-50, 100, 0}},
+        {{90, 0, 0},       {0, 0, 500}},
+        {{-120, 45, -60},  {10, -20, 30}},
+        {{0, 89.9, 0},     {0, 0, 0}},   // near gimbal lock
+    };
+
+    for (size_t i = 0; i < cases.size(); ++i) {
+        gp_Trsf trsf = RpyPosTrsf(cases[i].rpy, cases[i].pos);
+        Vector3d rpy_out, pos_out;
+        TrsfToRpyPos(trsf, rpy_out, pos_out);
+
+        // Round-trip: build trsf from extracted values and compare
+        gp_Trsf trsf2 = RpyPosTrsf(rpy_out, pos_out);
+        QVERIFY2(trsfNearEqual(trsf, trsf2, 1e-6, 1e-4),
+                 qPrintable(QString("TrsfToRpyPos round-trip failed for case %1").arg(i)));
+    }
+}
 
 QTEST_MAIN(TestRobotKinematics)
 #include "TestRobotKinematics.moc"

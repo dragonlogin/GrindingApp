@@ -21,6 +21,13 @@ GRINDING_OCC_EXPORT gp_Trsf RpyPosTrsf(const nl::utils::Vector3d& rpy,
 // Compute world transforms for all joints at home pose (index 0 = Joint1).
 GRINDING_OCC_EXPORT std::vector<gp_Trsf> ComputeFkHome(const nl::core::RbRobot& robot);
 
+// Extract RPY angles (degrees) and position (mm) from a gp_Trsf.
+// Convention: R = Rz(yaw) * Ry(pitch) * Rx(roll), matching RpyPosTrsf.
+// rpy = {yaw, pitch, roll}, pos = {x, y, z}.
+GRINDING_OCC_EXPORT void TrsfToRpyPos(const gp_Trsf& trsf,
+                                        nl::utils::Vector3d& rpy,
+                                        nl::utils::Vector3d& pos);
+
 } // namespace occ
 } // namespace nl
 

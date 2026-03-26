@@ -62,5 +62,32 @@ std::vector<gp_Trsf> ComputeFkHome(const RbRobot& robot)
     return fk;
 }
 
+void TrsfToRpyPos(const gp_Trsf& trsf, Vector3d& rpy, Vector3d& pos)
+{
+    const gp_XYZ& t = trsf.TranslationPart();
+    pos = {t.X(), t.Y(), t.Z()};
+
+    const gp_Mat& R = trsf.VectorialPart();
+    // R = Rz(yaw) * Ry(pitch) * Rx(roll)
+    // R(2,0) = -sin(pitch)
+    // gp_Mat is 1-indexed: Value(r,c) = R(r-1, c-1)
+    double sp = -R.Value(3, 1);  // -R(2,0) = sin(pitch)
+    if (sp > 1.0 - 1e-10) {
+        // Gimbal lock: pitch = +90, roll = 0, yaw = atan2(R(0,1), R(1,1))
+        rpy[1] = 90.0;
+        rpy[0] = atan2(R.Value(1, 2), R.Value(2, 2)) / kDeg;
+        rpy[2] = 0.0;
+    } else if (sp < -1.0 + 1e-10) {
+        // Gimbal lock: pitch = -90, roll = 0, yaw = atan2(-R(0,1), R(1,1))
+        rpy[1] = -90.0;
+        rpy[0] = atan2(-R.Value(1, 2), R.Value(2, 2)) / kDeg;
+        rpy[2] = 0.0;
+    } else {
+        rpy[1] = asin(sp) / kDeg;                                         // pitch
+        rpy[0] = atan2(R.Value(2, 1), R.Value(1, 1)) / kDeg;             // yaw  = atan2(R(1,0), R(0,0))
+        rpy[2] = atan2(R.Value(3, 2), R.Value(3, 3)) / kDeg;             // roll = atan2(R(2,1), R(2,2))
+    }
+}
+
 } // namespace occ
 } // namespace nl

@@ -54,7 +54,13 @@ private:
 
     void SetupJogPanel();
     void UpdateRobotDisplay();
+    void UpdateTcpPoseDisplay();
+    void UpdateTcpPoseDisplay(const std::vector<gp_Trsf>& fk);
     void UpdateCoordinateFrames(const std::vector<gp_Trsf>& fk);
+
+    void OnPoseEdited(double x, double y, double z, double rx, double ry, double rz);
+    void OnIkSolutionSelected(int index);
+    void OnReferenceFrameChanged(int index);
 
     void SetupSceneTree();
     void AddRobot(const std::string& name);
@@ -84,6 +90,9 @@ private:
     Handle(AIS_Trihedron) tool_tcp_frame_;
     gp_Trsf               tool_base_trsf_;
     gp_Trsf               tool_tcp_trsf_;
+
+    int tcp_ref_mode_ = 0;  // 0=Flange, 1=Tool TCP
+    std::vector<nl::utils::Q> current_ik_solutions_;
 };
 
 } // namespace ui

@@ -170,6 +170,12 @@ void MainWindow::SetupJogPanel()
         joint_angles_ = angles;
         UpdateRobotDisplay();
     });
+    connect(jog_panel_, &JogPanel::PoseEdited,
+            this, &MainWindow::OnPoseEdited);
+    connect(jog_panel_, &JogPanel::IkSolutionSelected,
+            this, &MainWindow::OnIkSolutionSelected);
+    connect(jog_panel_, &JogPanel::ReferenceFrameChanged,
+            this, &MainWindow::OnReferenceFrameChanged);
     addDockWidget(Qt::RightDockWidgetArea, jog_panel_);
 }
 
@@ -212,6 +218,69 @@ void MainWindow::UpdateRobotDisplay()
     }
 
     viewer_->Context()->UpdateCurrentViewer();
+    UpdateTcpPoseDisplay(fk);
+}
+
+void MainWindow::UpdateTcpPoseDisplay()
+{
+    if (robot_meshes_.empty()) return;
+    std::vector<gp_Trsf> fk = ComputeFk(current_robot_, joint_angles_);
+    UpdateTcpPoseDisplay(fk);
+}
+
+void MainWindow::UpdateTcpPoseDisplay(const std::vector<gp_Trsf>& fk)
+{
+    if (fk.empty()) return;
+
+    gp_Trsf pose_trsf = fk.back();
+    if (tcp_ref_mode_ == 1)
+        pose_trsf.Multiply(tool_tcp_trsf_);
+
+    nl::utils::Vector3d rpy, pos;
+    TrsfToRpyPos(pose_trsf, rpy, pos);
+    jog_panel_->SetTcpPose(pos[0], pos[1], pos[2], rpy[0], rpy[1], rpy[2]);
+}
+
+void MainWindow::OnPoseEdited(double x, double y, double z,
+                               double rx, double ry, double rz)
+{
+    nl::utils::Vector3d rpy(rx, ry, rz);
+    nl::utils::Vector3d pos(x, y, z);
+    gp_Trsf target = RpyPosTrsf(rpy, pos);
+
+    // If Tool TCP mode, compute flange target = target * tool_tcp^-1
+    if (tcp_ref_mode_ == 1) {
+        gp_Trsf tcp_inv = tool_tcp_trsf_.Inverted();
+        target.Multiply(tcp_inv);
+    }
+
+    std::vector<nl::utils::Q> solutions;
+    if (!ComputeIkAllSolutions(current_robot_, target, joint_angles_, solutions)) {
+        statusBar()->showMessage(tr("IK: No solution found"), 3000);
+        return;
+    }
+
+    current_ik_solutions_ = solutions;
+    jog_panel_->SetIkSolutions(solutions);
+
+    joint_angles_ = solutions[0];
+    jog_panel_->SetJointAngles(joint_angles_);
+    UpdateRobotDisplay();
+}
+
+void MainWindow::OnIkSolutionSelected(int index)
+{
+    if (index < 0 || index >= static_cast<int>(current_ik_solutions_.size()))
+        return;
+    joint_angles_ = current_ik_solutions_[index];
+    jog_panel_->SetJointAngles(joint_angles_);
+    UpdateRobotDisplay();
+}
+
+void MainWindow::OnReferenceFrameChanged(int index)
+{
+    tcp_ref_mode_ = index;
+    UpdateTcpPoseDisplay();
 }
 
 void MainWindow::SetupSceneTree()
