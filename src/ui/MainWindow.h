@@ -16,6 +16,7 @@
 #include <gp_Trsf.hxx>
 
 #include "GrindingUIExport.h"
+#include "Q.h"
 #include "RbXmlParser.h"
 
 namespace nl {
@@ -73,7 +74,7 @@ private:
     };
     std::vector<RobotMesh>  robot_meshes_;
     nl::core::RbRobot       current_robot_;
-    double                  joint_angles_[6] = {};
+    nl::utils::Q            joint_angles_;
 
     QSlider*        joint_sliders_[6]   = {};
     QDoubleSpinBox* joint_spinboxes_[6] = {};

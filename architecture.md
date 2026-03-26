@@ -16,8 +16,11 @@ Qt5 + OpenCASCADE (OCCT) 机器人磨削仿真应用。
 ## CMake 模块架构
 
 ```
-GrindingCore  (SHARED DLL)      src/
-    │  Qt5::Core/Xml, 共享数据类型
+GrindingUtils (SHARED DLL)      src/utils/
+    │  纯 C++ 数据类型：Vector3d、Q
+    │
+GrindingCore  (SHARED DLL)      src/core/
+    │  Qt5::Core/Xml，共享数据类型；depends on GrindingUtils
     │
     ├── GrindingOcc  (SHARED DLL)   src/occ/
     │     OpenCASCADE OCCT libs
@@ -35,12 +38,13 @@ TestRobotKinematics  (EXE)  tests/     → links GrindingOcc + GrindingKinematic
 
 PUBLIC include 目录随依赖链自动传播，无需消费方手动添加：
 
-| 模块 | 暴露的 include 路径 |
-|---|---|
-| `GrindingCore` | `src/` |
-| `GrindingOcc` | `src/occ/`（继承 `src/`） |
-| `GrindingKinematics` | `src/kinematics/`（继承 `src/`） |
-| `GrindingUI` | `src/ui/`（继承所有上游） |
+| 模块 | namespace | 暴露的 include 路径 |
+|---|---|---|
+| `GrindingUtils` | `nl::utils` | `src/utils/` |
+| `GrindingCore` | `nl::core` | `src/core/`（继承 `src/utils/`） |
+| `GrindingOcc` | `nl::occ` | `src/occ/`（继承 `src/core/`） |
+| `GrindingKinematics` | `nl::kinematics` | `src/kinematics/`（继承 `src/core/`） |
+| `GrindingUI` | `nl::ui` | `src/ui/`（继承所有上游） |
 
 ---
 
@@ -48,6 +52,7 @@ PUBLIC include 目录随依赖链自动传播，无需消费方手动添加：
 
 | CMake 目标 | 类型 | 输出路径 |
 |---|---|---|
+| `GrindingUtils` | SHARED DLL | `build/bin/Release/GrindingUtils.dll` |
 | `GrindingCore` | SHARED DLL | `build/bin/Release/GrindingCore.dll` |
 | `GrindingOcc` | SHARED DLL | `build/bin/Release/GrindingOcc.dll` |
 | `GrindingKinematics` | SHARED DLL | `build/bin/Release/GrindingKinematics.dll` |
@@ -64,24 +69,33 @@ GrindingApp/
 ├── execute/
 │   └── main.cpp                       # 可执行入口：QApplication + MainWindow
 ├── src/
-│   ├── CMakeLists.txt                 # GrindingCore (SHARED DLL)
-│   ├── GrindingCoreExport.h           # GRINDING_CORE_EXPORT 宏
-│   ├── RbXmlParser.h/cpp              # 共享数据类型：RbRobot / RbJoint / RbDrawable
+│   ├── CMakeLists.txt                 # add_subdirectory 聚合
+│   ├── utils/
+│   │   ├── CMakeLists.txt             # GrindingUtils (SHARED DLL)
+│   │   ├── GrindingUtilsExport.h      # GRINDING_UTILS_EXPORT 宏
+│   │   ├── Vector3d.h                 # nl::utils::Vector3d（全 inline，无 .cpp）
+│   │   └── Q.h/cpp                    # nl::utils::Q（关节角配置，封装 double[]）
+│   ├── core/
+│   │   ├── CMakeLists.txt             # GrindingCore (SHARED DLL)
+│   │   ├── GrindingCoreExport.h       # GRINDING_CORE_EXPORT 宏
+│   │   └── RbXmlParser.h/cpp          # nl::core：RbRobot / RbJoint / RbDrawable
 │   ├── ui/
 │   │   ├── CMakeLists.txt             # GrindingUI (SHARED DLL)
 │   │   ├── GrindingUIExport.h         # GRINDING_UI_EXPORT 宏
-│   │   ├── MainWindow.h/cpp           # 主窗口：菜单、Jog面板、场景树、OCCT渲染
-│   │   └── OcctViewWidget.h/cpp       # Qt Widget 封装 OCCT V3d_View
+│   │   ├── MainWindow.h/cpp           # nl::ui::MainWindow：菜单、Jog面板、场景树
+│   │   └── OcctViewWidget.h/cpp       # nl::ui::OcctViewWidget：Qt 封装 OCCT V3d_View
 │   ├── occ/
 │   │   ├── CMakeLists.txt             # GrindingOcc (SHARED DLL)
 │   │   ├── GrindingOccExport.h        # GRINDING_OCC_EXPORT 宏
-│   │   ├── StlLoader.h/cpp            # 加载 .stl → TopoDS_Shape
-│   │   ├── StepImporter.h/cpp         # 加载 .step → TopoDS_Shape（工件用）
-│   │   └── RobotDisplay.h/cpp         # DhTrsf / RpyPosTrsf / ComputeFkHome
+│   │   ├── StlLoader.h/cpp            # nl::occ::StlLoader：.stl → TopoDS_Shape
+│   │   ├── StepImporter.h/cpp         # nl::occ::StepImporter：.step → TopoDS_Shape
+│   │   └── RobotDisplay.h/cpp         # nl::occ：DhTrsf / RpyPosTrsf / ComputeFkHome
 │   └── kinematics/
 │       ├── CMakeLists.txt             # GrindingKinematics (SHARED DLL)
 │       ├── GrindingKinematicsExport.h # GRINDING_KINEMATICS_EXPORT 宏
-│       └── RobotKinematics.h/cpp      # ComputeFk（Eigen3 DH FK）
+│       ├── IKinematicsSolver.h        # nl::kinematics::IKinematicsSolver（抽象接口）
+│       ├── EigenSolver.h/cpp          # nl::kinematics::EigenSolver（Eigen3 实现）
+│       └── RobotKinematics.h/cpp      # nl::kinematics：ComputeFk / ComputeIk（自由函数）
 ├── tests/
 │   ├── CMakeLists.txt                 # TestRobotKinematics → links GrindingOcc + GrindingKinematics
 │   └── TestRobotKinematics.cpp        # Qt Test：Eigen FK vs 手工 DH 对比
@@ -103,40 +117,68 @@ GrindingApp/
 
 ## 模块职责
 
-### `src/` — GrindingCore（共享数据类型）
+### `src/utils/` — GrindingUtils（基础数据类型）
+
+| 文件 | 职责 |
+|---|---|
+| `Vector3d.h` | `nl::utils::Vector3d`：3D 向量，接口边界用（全 inline，无 DLL 符号） |
+| `Q.h/cpp` | `nl::utils::Q`：关节角配置（封装 `std::vector<double>`，`operator[]`） |
+
+### `src/core/` — GrindingCore（共享数据类型）
 
 | 文件 | 职责 |
 |---|---|
 | `GrindingCoreExport.h` | `GRINDING_CORE_EXPORT` 宏 |
-| `RbXmlParser.h/cpp` | 静态 `Parse(xml_path)` → `RbRobot`（含 DH 参数和 STL 路径） |
+| `RbXmlParser.h/cpp` | 静态 `Parse(xml_path)` → `nl::core::RbRobot`（含 DH 参数和 STL 路径） |
 
 ### `src/ui/` — GrindingUI（Qt UI 层）
 
 | 文件 | 职责 |
 |---|---|
-| `MainWindow.h/cpp` | 主窗口：UI 组装、场景树、Jog 面板、机器人/工具/工件加载 |
-| `OcctViewWidget.h/cpp` | 封装 OCCT 3D 视口，暴露 `Context()` / `View()` / `Viewer()` |
+| `MainWindow.h/cpp` | `nl::ui::MainWindow`：UI 组装、场景树、Jog 面板、机器人/工具/工件加载 |
+| `OcctViewWidget.h/cpp` | `nl::ui::OcctViewWidget`：封装 OCCT 3D 视口，暴露 `Context()` / `View()` |
 
 ### `src/occ/` — GrindingOcc（OpenCASCADE 操作层）
 
 | 文件 | 职责 |
 |---|---|
-| `StlLoader.h/cpp` | 静态 `Load(path)` → `TopoDS_Shape`（RWStl 读取） |
-| `StepImporter.h/cpp` | 静态 `Load(path, face_count*)` → `TopoDS_Shape`（工件 STEP 导入） |
-| `RobotDisplay.h/cpp` | `DhTrsf()`、`RpyPosTrsf()`、`ComputeFkHome()` |
+| `StlLoader.h/cpp` | `nl::occ::StlLoader`：静态 `Load(path)` → `TopoDS_Shape` |
+| `StepImporter.h/cpp` | `nl::occ::StepImporter`：静态 `Load(path, face_count*)` → `TopoDS_Shape` |
+| `RobotDisplay.h/cpp` | `nl::occ`：`DhTrsf()`、`RpyPosTrsf(Vector3d)`、`ComputeFkHome()` |
 
 ### `src/kinematics/` — GrindingKinematics（运动学层）
 
 | 文件 | 职责 |
 |---|---|
-| `RobotKinematics.h/cpp` | `ComputeFk(robot, angles[6])` → `gp_Trsf × 6`（各关节世界坐标系，Eigen3 实现） |
+| `IKinematicsSolver.h` | `nl::kinematics::IKinematicsSolver`：FK/IK 抽象接口（纯虚） |
+| `EigenSolver.h/cpp` | `nl::kinematics::EigenSolver`：Eigen3 实现 FK + IK（Jacobian 伪逆 SVD） |
+| `RobotKinematics.h/cpp` | `nl::kinematics`：`ComputeFk(robot, Q)` / `ComputeIk(robot, T, Q, Q&)`（自由函数，委托 EigenSolver） |
 
 ---
 
 ## 核心数据结构
 
 ```cpp
-// src/RbXmlParser.h
+// src/utils/Vector3d.h  (nl::utils)
+struct Vector3d {
+    double x = 0.0, y = 0.0, z = 0.0;
+    double  operator[](int i) const;
+    double& operator[](int i);
+};
+
+// src/utils/Q.h  (nl::utils)
+class Q {
+    std::vector<double> values_;  // 关节角（度）
+public:
+    explicit Q(int n = 6, double val = 0.0);
+    Q(std::initializer_list<double> vals);
+    int    size() const;
+    double  operator[](int i) const;
+    double& operator[](int i);
+    const double* data() const;
+};
+
+// src/core/RbXmlParser.h  (nl::core)
 struct RbJoint {
     std::string name;
     double alpha_deg, a, d, offset_deg;  // Craig DH 参数（a/d 单位 mm）
@@ -144,10 +186,10 @@ struct RbJoint {
 
 struct RbDrawable {
     std::string name;
-    std::string ref_joint;  // "Robot_Base" | "Joint1".."Joint6"
-    double rpy[3];          // 欧拉角（RobWork 顺序：Rz*Ry*Rx），单位 deg
-    double pos[3];          // 平移，单位 mm
-    std::string mesh_file;  // .stl 绝对路径
+    std::string ref_joint;           // "Robot_Base" | "Joint1".."Joint6"
+    utils::Vector3d rpy;             // 欧拉角（RobWork 顺序：Rz*Ry*Rx），单位 deg
+    utils::Vector3d pos;             // 平移，单位 mm
+    std::string mesh_file;           // .stl 绝对路径
 };
 
 struct RbRobot {
@@ -183,8 +225,9 @@ RbXmlParser::Parse()          → RbRobot（DH参数 + STL路径）
 
 | 任务 | 主要文件 |
 |---|---|
-| 修改 FK 计算逻辑 | `src/kinematics/RobotKinematics.cpp` |
-| 添加 IK | `src/kinematics/RobotKinematics.h/cpp` → 新增 `ComputeIk()` |
+| 修改 FK 计算逻辑 | `src/kinematics/RobotKinematics.cpp` (或 `EigenSolver.cpp`) |
+| 修改 IK 逻辑 | `src/kinematics/EigenSolver.cpp` → `ComputeIk()` |
+| 替换运动学后端 | 实现 `IKinematicsSolver` 接口，在 `RobotKinematics.cpp` 中切换 |
 | 修改 Jog 面板 UI | `src/ui/MainWindow.cpp` → `SetupJogPanel()` |
 | 修改关节坐标系渲染 | `src/ui/MainWindow.cpp` → `UpdateCoordinateFrames()` |
 | 修改场景树 | `src/ui/MainWindow.cpp` → `SetupSceneTree()`, `AddRobot()`, `AddTool()` |
@@ -202,10 +245,10 @@ RbXmlParser::Parse()          → RbRobot（DH参数 + STL路径）
 ## MainWindow 成员速查
 
 ```cpp
-// src/ui/MainWindow.h
+// src/ui/MainWindow.h  (nl::ui::MainWindow)
 OcctViewWidget*        viewer_            // 3D 视口
-RbRobot                current_robot_     // 已加载机器人数据
-double                 joint_angles_[6]   // 当前关节角（度）
+nl::core::RbRobot      current_robot_     // 已加载机器人数据
+nl::utils::Q           joint_angles_      // 当前关节角（度），Q(6)
 std::vector<RobotMesh> robot_meshes_      // 机器人各节 AIS 对象
 QSlider*               joint_sliders_[6]  // Jog 滑块
 QTreeWidget*           scene_tree_        // 场景树

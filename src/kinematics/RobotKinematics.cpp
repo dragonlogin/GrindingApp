@@ -6,6 +6,8 @@
 #include <Eigen/Dense>
 #include <Eigen/SVD>
 
+#include "Q.h"
+
 namespace nl {
 namespace kinematics {
 
@@ -96,7 +98,7 @@ Eigen::Vector3d RotError(const Eigen::Matrix3d& R_cur, const Eigen::Matrix3d& R_
 
 // ---------------------------------------------------------------------------
 
-std::vector<gp_Trsf> ComputeFk(const nl::core::RbRobot& robot, const double joint_angles[6])
+std::vector<gp_Trsf> ComputeFk(const nl::core::RbRobot& robot, const nl::utils::Q& joint_angles)
 {
     int n = static_cast<int>(robot.joints.size());
     Eigen::VectorXd q(n);
@@ -111,7 +113,7 @@ std::vector<gp_Trsf> ComputeFk(const nl::core::RbRobot& robot, const double join
 }
 
 bool ComputeIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
-               const double init_angles[6], double out_angles[6])
+               const nl::utils::Q& init_angles, nl::utils::Q& out_angles)
 {
     constexpr double kPosTol   = 0.01;
     constexpr double kRotTol   = 1e-4;

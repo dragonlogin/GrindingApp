@@ -31,9 +31,6 @@ find_package(Eigen3 REQUIRED)
 #   GrindingKinematics  src/kinematics/
 #   GrindingUI          src/ui/
 add_subdirectory(src)
-add_subdirectory(src/occ)
-add_subdirectory(src/kinematics)
-add_subdirectory(src/ui)
 
 # ── Translation (optional) ───────────────────────────────────────
 set(TS_FILES translations/zh_CN.ts)
@@ -73,8 +70,9 @@ set(APP_SOURCES
 add_executable(GrindingApp ${QM_FILES} ${APP_SOURCES})
 
 # Links all four static modules; PUBLIC deps propagate transitively
-target_link_libraries(GrindingApp PRIVATE
-    GrindingCore
+target_link_libraries(GrindingApp
+    PRIVATE
+    GrindingUtils
     GrindingOcc
     GrindingKinematics
     GrindingUI

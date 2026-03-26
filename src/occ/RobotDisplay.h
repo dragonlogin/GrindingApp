@@ -6,6 +6,7 @@
 
 #include "GrindingOccExport.h"
 #include "RbXmlParser.h"
+#include "Vector3d.h"
 
 namespace nl {
 namespace occ {
@@ -14,7 +15,8 @@ namespace occ {
 GRINDING_OCC_EXPORT gp_Trsf DhTrsf(double theta_deg, double d, double a, double alpha_deg);
 
 // Compute RPY (RobWork: Rz(yaw)*Ry(pitch)*Rx(roll)) + translation.
-GRINDING_OCC_EXPORT gp_Trsf RpyPosTrsf(const double rpy[3], const double pos[3]);
+GRINDING_OCC_EXPORT gp_Trsf RpyPosTrsf(const nl::utils::Vector3d& rpy,
+                                         const nl::utils::Vector3d& pos);
 
 // Compute world transforms for all joints at home pose (index 0 = Joint1).
 GRINDING_OCC_EXPORT std::vector<gp_Trsf> ComputeFkHome(const nl::core::RbRobot& robot);

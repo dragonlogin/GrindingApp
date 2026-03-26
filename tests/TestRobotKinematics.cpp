@@ -3,6 +3,14 @@
 
 #include "RobotKinematics.h"
 #include "RobotDisplay.h"
+#include "Q.h"
+
+using nl::core::RbRobot;
+using nl::core::RbJoint;
+using nl::utils::Q;
+using nl::kinematics::ComputeFk;
+using nl::occ::ComputeFkHome;
+using nl::occ::DhTrsf;
 
 class TestRobotKinematics : public QObject {
     Q_OBJECT
@@ -42,7 +50,7 @@ static bool trsfNearEqual(const gp_Trsf& a, const gp_Trsf& b,
 void TestRobotKinematics::testFkMatchesManualAtHome()
 {
     RbRobot robot = makeIrb140();
-    double angles[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    Q angles({0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
 
     std::vector<gp_Trsf> fk_kdl    = ComputeFk(robot, angles);
     std::vector<gp_Trsf> fk_manual = ComputeFkHome(robot);
@@ -56,7 +64,7 @@ void TestRobotKinematics::testFkMatchesManualAtHome()
 void TestRobotKinematics::testFkMatchesManualAtNonZero()
 {
     RbRobot robot = makeIrb140();
-    double angles[6] = {30.0, -45.0, 60.0, 90.0, -30.0, 15.0};
+    Q angles({30.0, -45.0, 60.0, 90.0, -30.0, 15.0});
 
     std::vector<gp_Trsf> fk_kdl = ComputeFk(robot, angles);
 

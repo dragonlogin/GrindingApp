@@ -40,11 +40,12 @@ using namespace nl::core;
 namespace nl {
 namespace ui {
 
-static void ParseXyz(const std::string& s, double out[3])
+static nl::utils::Vector3d ParseXyz(const std::string& s)
 {
     auto p = QString::fromStdString(s).split(' ', Qt::SkipEmptyParts);
     if (p.size() == 3)
-        for (int i = 0; i < 3; ++i) out[i] = p[i].toDouble();
+        return {p[0].toDouble(), p[1].toDouble(), p[2].toDouble()};
+    return {};
 }
 
 static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const std::string& role)
@@ -401,7 +402,7 @@ void MainWindow::OnLoadRobot()
     robot_meshes_.clear();
 
     current_robot_ = robot;
-    memset(joint_angles_, 0, sizeof(joint_angles_));
+    joint_angles_ = nl::utils::Q(6, 0.0);
     for (int i = 0; i < 6; ++i) {
         if (joint_sliders_[i])   joint_sliders_[i]->setValue(0);
         if (joint_spinboxes_[i]) joint_spinboxes_[i]->setValue(0.0);
@@ -451,18 +452,17 @@ void MainWindow::OnLoadTool()
     QString stl_path = QDir(base_dir).filePath(stl_rel);
 
     QDomElement base_frame_el = root.elementsByTagName("Frame").at(0).toElement();
-    double base_pos[3] = {}, base_rpy[3] = {};
-    ParseXyz(base_frame_el.firstChildElement("Pos").text().toStdString(), base_pos);
-    ParseXyz(base_frame_el.firstChildElement("RPY").text().toStdString(), base_rpy);
+    nl::utils::Vector3d base_pos = ParseXyz(base_frame_el.firstChildElement("Pos").text().toStdString());
+    nl::utils::Vector3d base_rpy = ParseXyz(base_frame_el.firstChildElement("RPY").text().toStdString());
     tool_base_trsf_ = RpyPosTrsf(base_rpy, base_pos);
 
-    double tcp_pos[3] = {}, tcp_rpy[3] = {};
+    nl::utils::Vector3d tcp_pos, tcp_rpy;
     QDomNodeList frames = root.elementsByTagName("Frame");
     for (int i = 0; i < frames.count(); ++i) {
         QDomElement fe = frames.at(i).toElement();
         if (fe.attribute("type") == "EndEffector") {
-            ParseXyz(fe.firstChildElement("Pos").text().toStdString(), tcp_pos);
-            ParseXyz(fe.firstChildElement("RPY").text().toStdString(), tcp_rpy);
+            tcp_pos = ParseXyz(fe.firstChildElement("Pos").text().toStdString());
+            tcp_rpy = ParseXyz(fe.firstChildElement("RPY").text().toStdString());
             break;
         }
     }

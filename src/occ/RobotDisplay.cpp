@@ -2,7 +2,10 @@
 #include <cmath>
 #include <vector>
 
-using namespace nl::core;
+using nl::core::RbRobot;
+using nl::core::RbJoint;
+using nl::utils::Vector3d;
+
 namespace nl {
 namespace occ {
 
@@ -27,7 +30,7 @@ gp_Trsf DhTrsf(double theta_deg, double d, double a, double alpha_deg)
     return trsf;
 }
 
-gp_Trsf RpyPosTrsf(const double rpy[3], const double pos[3])
+gp_Trsf RpyPosTrsf(const Vector3d& rpy, const Vector3d& pos)
 {
     double cy = cos(rpy[0] * kDeg), sy = sin(rpy[0] * kDeg);  // rpy[0] = Z (yaw)
     double cp = cos(rpy[1] * kDeg), sp = sin(rpy[1] * kDeg);  // rpy[1] = Y (pitch)

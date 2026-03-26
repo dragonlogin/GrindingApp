@@ -54,8 +54,6 @@ RbRobot RbXmlParser::Parse(const std::string& xml_path)
         RbDrawable d;
         d.name      = el.attribute("name").toStdString();
         d.ref_joint = el.attribute("refframe").toStdString();
-        memset(d.rpy, 0, sizeof(d.rpy));
-        memset(d.pos, 0, sizeof(d.pos));
 
         QDomElement rpy_el = el.firstChildElement("RPY");
         if (!rpy_el.isNull()) {

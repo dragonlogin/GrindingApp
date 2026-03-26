@@ -1,9 +1,12 @@
 set(HEADERS
     GrindingKinematicsExport.h
+    IKinematicsSolver.h
+    EigenSolver.h
     RobotKinematics.h
 )
 
 set(SOURCES
+    EigenSolver.cpp
     RobotKinematics.cpp
 )
 

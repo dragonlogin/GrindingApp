@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "GrindingCoreExport.h"
+#include "Vector3d.h"
 
 namespace nl {
 namespace core {
@@ -20,8 +21,8 @@ struct RbJoint {
 struct RbDrawable {
     std::string name;
     std::string ref_joint;  // "Robot_Base" or "Joint1".."Joint6"
-    double rpy[3];          // degrees: roll, pitch, yaw
-    double pos[3];          // mm
+    utils::Vector3d rpy;          // degrees: roll, pitch, yaw
+    utils::Vector3d pos;          // mm
     std::string mesh_file;  // absolute path (with .stl extension)
 };
 
