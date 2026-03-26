@@ -18,6 +18,7 @@ class TestRobotKinematics : public QObject {
 private slots:
     void testFkMatchesManualAtHome();
     void testFkMatchesManualAtNonZero();
+    void testIkRoundTrip();
 };
 
 static RbRobot makeIrb140()
@@ -84,6 +85,37 @@ void TestRobotKinematics::testFkMatchesManualAtNonZero()
         QVERIFY2(trsfNearEqual(fk_kdl[i], fk_manual[i]),
                  qPrintable(QString("Joint %1 mismatch at non-zero angles").arg(i + 1)));
 }
+
+void TestRobotKinematics::TestRobotKinematics::testIkRoundTrip()
+{
+    RbRobot robot = makeIrb140();
+    Q init({0, 0, 0, 0, 0, 0});
+
+    // Test multiple poses
+    std::vector<Q> test_angles = {
+        Q({0, 0, 0, 0, 0, 0}),
+        Q({30, -45, 60, 90, -30, 15}),
+        Q({-60, 20, -30, 45, 60, -90}),
+        Q({90, 0, 0, 0, -45, 0}),
+    };
+
+    for (const auto& angles : test_angles) {
+        // FK
+        std::vector<gp_Trsf> fk = ComputeFk(robot, angles);
+        gp_Trsf tcp = fk.back();
+
+        // IK
+        Q result(6);
+        bool ok = nl::kinematics::ComputeIk(robot, tcp, angles, result);
+        QVERIFY2(ok, "IK failed to converge");
+
+        // FK again with IK result
+        std::vector<gp_Trsf> fk2 = ComputeFk(robot, result);
+        QVERIFY2(trsfNearEqual(fk.back(), fk2.back(), 1e-6, 0.01),
+                 qPrintable(QString("FK-IK-FK round-trip failed")));
+    }
+}
+
 
 QTEST_MAIN(TestRobotKinematics)
 #include "TestRobotKinematics.moc"
