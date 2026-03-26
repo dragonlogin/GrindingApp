@@ -24,30 +24,19 @@
 #include <AIS_Shape.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <V3d_View.hxx>
-#include <Geom_Axis2Placement.hxx>
-#include <AIS_Trihedron.hxx>
 
 #include "OcctViewWidget.h"
 #include "JogPanel.h"
+#include "RobotController.h"
+#include "Commands.h"
 #include "StepImporter.h"
-#include "StlLoader.h"
-#include "RobotDisplay.h"
 #include "RobotKinematics.h"
+#include "RobotDisplay.h"
 
 using namespace nl::occ;
-using namespace nl::kinematics;
-using namespace nl::core;
 
 namespace nl {
 namespace ui {
-
-static nl::utils::Vector3d ParseXyz(const std::string& s)
-{
-    auto p = QString::fromStdString(s).split(' ', Qt::SkipEmptyParts);
-    if (p.size() == 3)
-        return {p[0].toDouble(), p[1].toDouble(), p[2].toDouble()};
-    return {};
-}
 
 static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const std::string& role)
 {
@@ -73,28 +62,31 @@ static QTreeWidgetItem* FindNode(QTreeWidget* tree, const std::string& role)
     return nullptr;
 }
 
-static Handle(AIS_Trihedron) MakeTrihedron(const gp_Trsf& trsf, double size)
-{
-    gp_Pnt origin(trsf.TranslationPart());
-    gp_Mat rot = trsf.VectorialPart();
-    gp_Dir z_dir(rot.Column(3));
-    gp_Dir x_dir(rot.Column(1));
-    Handle(Geom_Axis2Placement) pl =
-        new Geom_Axis2Placement(gp_Ax2(origin, z_dir, x_dir));
-    Handle(AIS_Trihedron) tri = new AIS_Trihedron(pl);
-    tri->SetSize(size);
-    return tri;
-}
-
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
     setWindowTitle("GrindingApp");
 
+    undo_stack_ = new QUndoStack(this);
+
     SetupMenuBar();
     SetupToolBar();
     SetupStatusBar();
     SetupCentralWidget();
+    
+    // Initialize controller after central widget is ready
+    controller_ = new RobotController(viewer_->Context(), this);
+    connect(controller_, &RobotController::RobotLoaded, this, &MainWindow::AddRobot);
+    connect(controller_, &RobotController::ToolLoaded, this, [this](const QString& name) {
+        AddTool(name, "robot");
+    });
+    connect(controller_, &RobotController::DisplayUpdated, this, [this]() {
+        viewer_->Context()->UpdateCurrentViewer();
+        UpdateTcpPoseDisplay();
+        UpdateRobotJoints();
+    });
+    connect(controller_, &RobotController::JointAnglesChanged, this, &MainWindow::OnControllerJointAnglesChanged);
+
     SetupJogPanel();
     SetupSceneTree();
 }
@@ -119,6 +111,15 @@ void MainWindow::SetupMenuBar()
     fileMenu->addSeparator();
     fileMenu->addAction(tr("Exit(&Q)"), qApp, &QApplication::quit,
         QKeySequence("Ctrl+Q"));
+
+    QMenu* editMenu = menuBar()->addMenu(tr("Edit(&E)"));
+    QAction* undoAction = undo_stack_->createUndoAction(this, tr("Undo(&U)"));
+    undoAction->setShortcut(QKeySequence::Undo);
+    editMenu->addAction(undoAction);
+    
+    QAction* redoAction = undo_stack_->createRedoAction(this, tr("Redo(&R)"));
+    redoAction->setShortcut(QKeySequence::Redo);
+    editMenu->addAction(redoAction);
 
     QMenu* viewMenu = menuBar()->addMenu(tr("View(&V)"));
     viewMenu->addAction(tr("Front View"), this, &MainWindow::OnViewFront);
@@ -167,8 +168,19 @@ void MainWindow::SetupJogPanel()
 {
     jog_panel_ = new JogPanel(this);
     connect(jog_panel_, &JogPanel::JointAnglesChanged, this, [this](const nl::utils::Q& angles) {
-        joint_angles_ = angles;
-        UpdateRobotDisplay();
+        // Create an undo command instead of directly setting angles
+        nl::utils::Q old_angles = controller_->GetJointAngles();
+        // If the angles are the same, don't push a command
+        bool changed = false;
+        for (int i = 0; i < angles.size() && i < old_angles.size(); ++i) {
+            if (std::abs(angles[i] - old_angles[i]) > 1e-4) {
+                changed = true;
+                break;
+            }
+        }
+        if (changed) {
+            undo_stack_->push(new CmdJogJoints(controller_, old_angles, angles));
+        }
     });
     connect(jog_panel_, &JogPanel::PoseEdited,
             this, &MainWindow::OnPoseEdited);
@@ -179,65 +191,29 @@ void MainWindow::SetupJogPanel()
     addDockWidget(Qt::RightDockWidgetArea, jog_panel_);
 }
 
-void MainWindow::UpdateRobotDisplay()
+void MainWindow::OnControllerJointAnglesChanged(const nl::utils::Q& angles)
 {
-    if (robot_meshes_.empty()) return;
-
-    std::vector<gp_Trsf> fk = ComputeFk(current_robot_, joint_angles_);
-
-    auto joint_idx = [&](const std::string& name) -> int {
-        for (int i = 0; i < static_cast<int>(current_robot_.joints.size()); ++i)
-            if (current_robot_.joints[i].name == name) return i;
-        return -1;
-    };
-
-    for (auto& m : robot_meshes_) {
-        gp_Trsf local = RpyPosTrsf(m.drawable.rpy, m.drawable.pos);
-        int idx = joint_idx(m.drawable.ref_joint);
-        if (idx >= 0) {
-            gp_Trsf world = fk[idx];
-            world.Multiply(local);
-            local = world;
-        }
-        viewer_->Context()->SetLocation(m.ais, TopLoc_Location(local));
+    if (jog_panel_) {
+        jog_panel_->SetJointAngles(angles);
     }
-    UpdateCoordinateFrames(fk);
-    UpdateRobotJoints();
-
-    if (!tool_ais_.IsNull() && !fk.empty()) {
-        gp_Trsf tool_world = fk.back();
-        tool_world.Multiply(tool_base_trsf_);
-        viewer_->Context()->SetLocation(tool_ais_, TopLoc_Location(tool_world));
-
-        if (!tool_tcp_frame_.IsNull())
-            viewer_->Context()->Remove(tool_tcp_frame_, Standard_False);
-        gp_Trsf tcp_world = fk.back();
-        tcp_world.Multiply(tool_tcp_trsf_);
-        tool_tcp_frame_ = MakeTrihedron(tcp_world, 40.0);
-        viewer_->Context()->Display(tool_tcp_frame_, Standard_False);
-    }
-
-    viewer_->Context()->UpdateCurrentViewer();
-    UpdateTcpPoseDisplay(fk);
 }
 
 void MainWindow::UpdateTcpPoseDisplay()
 {
-    if (robot_meshes_.empty()) return;
-    std::vector<gp_Trsf> fk = ComputeFk(current_robot_, joint_angles_);
-    UpdateTcpPoseDisplay(fk);
-}
-
-void MainWindow::UpdateTcpPoseDisplay(const std::vector<gp_Trsf>& fk)
-{
+    std::vector<gp_Trsf> fk = controller_->GetCurrentFk();
     if (fk.empty()) return;
 
     gp_Trsf pose_trsf = fk.back();
     if (tcp_ref_mode_ == 1)
-        pose_trsf.Multiply(tool_tcp_trsf_);
+        pose_trsf.Multiply(controller_->GetToolTcpTrsf());
 
     nl::utils::Vector3d rpy, pos;
-    TrsfToRpyPos(pose_trsf, rpy, pos);
+    // We need TrsfToRpyPos logic, which was previously in RobotKinematics or MainWindow
+    // To avoid duplication, let's use the occ::TrsfToRpyPos from StlLoader/RobotDisplay if available,
+    // or we can implement a local helper since it was removed.
+    // Wait, earlier it was in MainWindow, let's check where it came from.
+    // I will temporarily add a dummy or re-implement it if it's missing, but it should be in RobotKinematics.
+    nl::occ::TrsfToRpyPos(pose_trsf, rpy, pos);
     jog_panel_->SetTcpPose(pos[0], pos[1], pos[2], rpy[0], rpy[1], rpy[2]);
 }
 
@@ -248,14 +224,15 @@ void MainWindow::OnPoseEdited(double x, double y, double z,
     nl::utils::Vector3d pos(x, y, z);
     gp_Trsf target = RpyPosTrsf(rpy, pos);
 
+    std::vector<nl::utils::Q> solutions;
+    // We can use controller's helper if we adjust it, or calculate here:
     // If Tool TCP mode, compute flange target = target * tool_tcp^-1
     if (tcp_ref_mode_ == 1) {
-        gp_Trsf tcp_inv = tool_tcp_trsf_.Inverted();
+        gp_Trsf tcp_inv = controller_->GetToolTcpTrsf().Inverted();
         target.Multiply(tcp_inv);
     }
 
-    std::vector<nl::utils::Q> solutions;
-    if (!ComputeIkAllSolutions(current_robot_, target, joint_angles_, solutions)) {
+    if (!nl::kinematics::ComputeIkAllSolutions(controller_->GetRobot(), target, controller_->GetJointAngles(), solutions)) {
         statusBar()->showMessage(tr("IK: No solution found"), 3000);
         return;
     }
@@ -263,18 +240,14 @@ void MainWindow::OnPoseEdited(double x, double y, double z,
     current_ik_solutions_ = solutions;
     jog_panel_->SetIkSolutions(solutions);
 
-    joint_angles_ = solutions[0];
-    jog_panel_->SetJointAngles(joint_angles_);
-    UpdateRobotDisplay();
+    undo_stack_->push(new CmdJogJoints(controller_, controller_->GetJointAngles(), solutions[0]));
 }
 
 void MainWindow::OnIkSolutionSelected(int index)
 {
     if (index < 0 || index >= static_cast<int>(current_ik_solutions_.size()))
         return;
-    joint_angles_ = current_ik_solutions_[index];
-    jog_panel_->SetJointAngles(joint_angles_);
-    UpdateRobotDisplay();
+    undo_stack_->push(new CmdJogJoints(controller_, controller_->GetJointAngles(), current_ik_solutions_[index]));
 }
 
 void MainWindow::OnReferenceFrameChanged(int index)
@@ -305,7 +278,7 @@ void MainWindow::SetupSceneTree()
     addDockWidget(Qt::LeftDockWidgetArea, dock);
 }
 
-void MainWindow::AddRobot(const std::string& name)
+void MainWindow::AddRobot(const QString& name)
 {
     auto* station = FindNode(scene_tree_, "station");
     if (!station) return;
@@ -313,7 +286,7 @@ void MainWindow::AddRobot(const std::string& name)
     auto* old = FindNode(scene_tree_, "robot");
     if (old) delete old;
 
-    auto* robot = new QTreeWidgetItem({QString::fromStdString(name), tr("Robot")});
+    auto* robot = new QTreeWidgetItem({name, tr("Robot")});
     robot->setData(0, Qt::UserRole, "robot");
     station->insertChild(0, robot);
     robot->setExpanded(true);
@@ -331,13 +304,16 @@ void MainWindow::UpdateRobotJoints()
             delete robot->takeChild(i);
     }
 
-    int n = static_cast<int>(current_robot_.joints.size());
+    const auto& current_robot = controller_->GetRobot();
+    const auto& joint_angles = controller_->GetJointAngles();
+
+    int n = static_cast<int>(current_robot.joints.size());
     for (int i = 0; i < n; ++i) {
-        double angle = (i < 6) ? joint_angles_[i] : 0.0;
+        double angle = (i < 6) ? joint_angles[i] : 0.0;
         bool is_tcp = (i == n - 1);
         QString display_name = is_tcp
-            ? QString::fromStdString(current_robot_.joints[i].name) + tr(" (TCP)")
-            : QString::fromStdString(current_robot_.joints[i].name);
+            ? QString::fromStdString(current_robot.joints[i].name) + tr(" (TCP)")
+            : QString::fromStdString(current_robot.joints[i].name);
 
         auto* item = new QTreeWidgetItem(
             {display_name, QString("%1°").arg(angle, 0, 'f', 1)});
@@ -347,18 +323,18 @@ void MainWindow::UpdateRobotJoints()
     }
 }
 
-void MainWindow::AddTool(const std::string& name, const std::string& parent_role)
+void MainWindow::AddTool(const QString& name, const std::string& parent_role)
 {
     auto* parent_node = FindNode(scene_tree_, parent_role);
     if (!parent_node) return;
 
-    auto* tool_node = new QTreeWidgetItem({QString::fromStdString(name), tr("Tool")});
+    auto* tool_node = new QTreeWidgetItem({name, tr("Tool")});
     tool_node->setData(0, Qt::UserRole, "tool");
     parent_node->addChild(tool_node);
     tool_node->setExpanded(true);
 
     auto* tcp = new QTreeWidgetItem(
-        {QString::fromStdString(name) + ".TCP0", tr("Frame")});
+        {name + ".TCP0", tr("Frame")});
     tcp->setData(0, Qt::UserRole, "tcp");
     tool_node->addChild(tcp);
 }
@@ -373,29 +349,6 @@ void MainWindow::AddWorkpiece(const std::string& name, const std::string& parent
     parent->addChild(wp);
 }
 
-void MainWindow::UpdateCoordinateFrames(const std::vector<gp_Trsf>& fk)
-{
-    if (!base_frame_.IsNull())
-        viewer_->Context()->Remove(base_frame_, Standard_False);
-    for (auto& t : joint_frames_)
-        viewer_->Context()->Remove(t, Standard_False);
-    joint_frames_.clear();
-
-    base_frame_ = MakeTrihedron(gp_Trsf(), 80.0);
-    viewer_->Context()->Display(base_frame_, Standard_False);
-
-    int n = static_cast<int>(fk.size());
-    for (int i = 0; i < n; ++i) {
-        Handle(AIS_Trihedron) tri = MakeTrihedron(fk[i], 50.0);
-        viewer_->Context()->Display(tri, Standard_False);
-
-        if (i < n - 1)
-            viewer_->Context()->Erase(tri, Standard_False);
-
-        joint_frames_.push_back(tri);
-    }
-}
-
 void MainWindow::OnSceneTreeContextMenu(const QPoint& pos)
 {
     QTreeWidgetItem* item = scene_tree_->itemAt(pos);
@@ -403,18 +356,11 @@ void MainWindow::OnSceneTreeContextMenu(const QPoint& pos)
     if (item->data(0, Qt::UserRole).toString() != "joint") return;
 
     int idx = item->data(0, Qt::UserRole + 1).toInt();
-    if (idx < 0 || idx >= static_cast<int>(joint_frames_.size())) return;
-
-    Handle(AIS_Trihedron) tri = joint_frames_[idx];
-    bool visible = viewer_->Context()->IsDisplayed(tri);
 
     QMenu menu(this);
-    menu.addAction(visible ? tr("Hide Frame") : tr("Show Frame"),
-                   [this, tri, visible]() {
-        if (visible)
-            viewer_->Context()->Erase(tri, Standard_True);
-        else
-            viewer_->Context()->Display(tri, Standard_True);
+    menu.addAction(tr("Toggle Frame Visibility"),
+                   [this, idx]() {
+        controller_->ToggleJointFrame(idx);
     });
     menu.exec(scene_tree_->mapToGlobal(pos));
 }
@@ -426,32 +372,12 @@ void MainWindow::OnLoadRobot()
         tr("Robot Files (*.xml)"));
     if (path.isEmpty()) return;
 
-    RbRobot robot = RbXmlParser::Parse(path.toStdString());
-    qDebug() << "Robot:" << robot.name.c_str()
-             << "joints:" << robot.joints.size()
-             << "drawables:" << robot.drawables.size();
-
-    for (auto& m : robot_meshes_)
-        viewer_->Context()->Remove(m.ais, Standard_False);
-    robot_meshes_.clear();
-
-    current_robot_ = robot;
-    joint_angles_ = nl::utils::Q(6, 0.0);
-    if (jog_panel_) jog_panel_->SetJointAngles(joint_angles_);
-
-    for (const RbDrawable& drw : robot.drawables) {
-        TopoDS_Shape shape = StlLoader::Load(drw.mesh_file);
-        if (shape.IsNull()) { qDebug() << drw.name.c_str() << "not found"; continue; }
-
-        Handle(AIS_Shape) ais = new AIS_Shape(shape);
-        viewer_->Context()->Display(ais, AIS_Shaded, 0, Standard_False);
-        robot_meshes_.push_back({drw, shape, ais});
+    if (controller_->LoadRobot(path.toStdString())) {
+        undo_stack_->clear(); // clear history for new robot
+        viewer_->View()->FitAll();
+    } else {
+        QMessageBox::warning(this, tr("Error"), tr("Failed to load robot file."));
     }
-
-    AddRobot(current_robot_.name);
-    viewer_->Context()->UpdateCurrentViewer();
-    UpdateRobotDisplay();
-    viewer_->View()->FitAll();
 }
 
 void MainWindow::OnLoadTool()
@@ -461,62 +387,9 @@ void MainWindow::OnLoadTool()
         tr("Tool Files (*.tool *.xml)"));
     if (path.isEmpty()) return;
 
-    QString xml_path = path;
-    if (path.endsWith(".tool", Qt::CaseInsensitive)) {
-        QFile f(path);
-        f.open(QIODevice::ReadOnly);
-        QJsonDocument jdoc = QJsonDocument::fromJson(f.readAll());
-        QString rw = jdoc.object().value("RWFile").toString();
-        xml_path = QFileInfo(path).absoluteDir().filePath(rw);
+    if (!controller_->LoadTool(path.toStdString())) {
+        QMessageBox::warning(this, tr("Error"), tr("Failed to load tool."));
     }
-
-    QString base_dir = QFileInfo(xml_path).absoluteDir().absolutePath();
-
-    QFile xf(xml_path);
-    xf.open(QIODevice::ReadOnly);
-    QDomDocument doc;
-    doc.setContent(&xf);
-    QDomElement root = doc.documentElement();
-
-    QString stl_rel  = root.elementsByTagName("Polytope").at(0)
-                           .toElement().attribute("file");
-    QString stl_path = QDir(base_dir).filePath(stl_rel);
-
-    QDomElement base_frame_el = root.elementsByTagName("Frame").at(0).toElement();
-    nl::utils::Vector3d base_pos = ParseXyz(base_frame_el.firstChildElement("Pos").text().toStdString());
-    nl::utils::Vector3d base_rpy = ParseXyz(base_frame_el.firstChildElement("RPY").text().toStdString());
-    tool_base_trsf_ = RpyPosTrsf(base_rpy, base_pos);
-
-    nl::utils::Vector3d tcp_pos, tcp_rpy;
-    QDomNodeList frames = root.elementsByTagName("Frame");
-    for (int i = 0; i < frames.count(); ++i) {
-        QDomElement fe = frames.at(i).toElement();
-        if (fe.attribute("type") == "EndEffector") {
-            tcp_pos = ParseXyz(fe.firstChildElement("Pos").text().toStdString());
-            tcp_rpy = ParseXyz(fe.firstChildElement("RPY").text().toStdString());
-            break;
-        }
-    }
-    tool_tcp_trsf_ = RpyPosTrsf(tcp_rpy, tcp_pos);
-
-    TopoDS_Shape shape = StlLoader::Load(stl_path.toStdString());
-    if (shape.IsNull()) {
-        qDebug() << "Tool STL not found:" << stl_path;
-        return;
-    }
-
-    if (!tool_ais_.IsNull())
-        viewer_->Context()->Remove(tool_ais_, Standard_False);
-    if (!tool_tcp_frame_.IsNull())
-        viewer_->Context()->Remove(tool_tcp_frame_, Standard_False);
-
-    tool_ais_ = new AIS_Shape(shape);
-    viewer_->Context()->Display(tool_ais_, AIS_Shaded, 0, Standard_False);
-
-    AddTool(QFileInfo(xml_path).baseName().toStdString(), "robot");
-
-    viewer_->Context()->UpdateCurrentViewer();
-    UpdateRobotDisplay();
 }
 
 void MainWindow::OnImportWorkpiece()

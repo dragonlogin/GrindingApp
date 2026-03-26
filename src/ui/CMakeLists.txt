@@ -1,17 +1,27 @@
 set(HEADERS
     GrindingUIExport.h
+    Commands.h
+)
+
+set(MOC_HEADER
     MainWindow.h
     OcctViewWidget.h
     JogPanel.h
+    RobotController.h
 )
+
+qt5_wrap_cpp(MOC_SOURCES ${MOC_HEADER})
 
 set(SOURCES
     MainWindow.cpp
     OcctViewWidget.cpp
     JogPanel.cpp
+    RobotController.cpp
+    Commands.cpp
+    ${MOC_SOURCES}
 )
 
-add_library(GrindingUI SHARED ${HEADERS} ${SOURCES})
+add_library(GrindingUI SHARED ${HEADERS} ${MOC_HEADER} ${SOURCES})
 
 target_compile_definitions(GrindingUI PRIVATE GRINDING_UI_BUILDING_DLL)
 

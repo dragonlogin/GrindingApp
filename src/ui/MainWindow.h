@@ -13,6 +13,8 @@
 #include <AIS_Shape.hxx>
 #include <gp_Trsf.hxx>
 
+#include <QUndoStack>
+
 #include "GrindingUIExport.h"
 #include "Q.h"
 #include "RbXmlParser.h"
@@ -22,6 +24,7 @@ namespace ui {
 
 class OcctViewWidget;
 class JogPanel;
+class RobotController;
 
 class GRINDING_UI_EXPORT MainWindow : public QMainWindow
 {
@@ -53,43 +56,27 @@ private:
     void SetupCentralWidget();
 
     void SetupJogPanel();
-    void UpdateRobotDisplay();
     void UpdateTcpPoseDisplay();
-    void UpdateTcpPoseDisplay(const std::vector<gp_Trsf>& fk);
-    void UpdateCoordinateFrames(const std::vector<gp_Trsf>& fk);
 
     void OnPoseEdited(double x, double y, double z, double rx, double ry, double rz);
     void OnIkSolutionSelected(int index);
     void OnReferenceFrameChanged(int index);
+    void OnControllerJointAnglesChanged(const nl::utils::Q& angles);
 
     void SetupSceneTree();
-    void AddRobot(const std::string& name);
+    void AddRobot(const QString& name);
     void UpdateRobotJoints();
-    void AddTool(const std::string& name, const std::string& parent_role);
+    void AddTool(const QString& name, const std::string& parent_role);
     void AddWorkpiece(const std::string& name, const std::string& parent_role);
 
     QLabel*          model_info_;
     QLabel*          coord_label_;
     OcctViewWidget*  viewer_ = nullptr;
+    RobotController* controller_ = nullptr;
+    QUndoStack*      undo_stack_ = nullptr;
 
-    struct RobotMesh {
-        nl::core::RbDrawable  drawable;
-        TopoDS_Shape          original;
-        Handle(AIS_Shape)     ais;
-    };
-    std::vector<RobotMesh>  robot_meshes_;
-    nl::core::RbRobot       current_robot_;
-    nl::utils::Q            joint_angles_;
     JogPanel*               jog_panel_ = nullptr;
-
-    QTreeWidget*                        scene_tree_   = nullptr;
-    std::vector<Handle(AIS_Trihedron)>  joint_frames_;
-    Handle(AIS_Trihedron)               base_frame_;
-
-    Handle(AIS_Shape)     tool_ais_;
-    Handle(AIS_Trihedron) tool_tcp_frame_;
-    gp_Trsf               tool_base_trsf_;
-    gp_Trsf               tool_tcp_trsf_;
+    QTreeWidget*            scene_tree_   = nullptr;
 
     int tcp_ref_mode_ = 0;  // 0=Flange, 1=Tool TCP
     std::vector<nl::utils::Q> current_ik_solutions_;

@@ -25,12 +25,14 @@ OcctViewWidget::OcctViewWidget(QWidget* parent)
     setAttribute(Qt::WA_NoSystemBackground, true);
     setAttribute(Qt::WA_OpaquePaintEvent, true);
     setMinimumSize(200, 200);
+
+    InitOcct();
 }
 
 void OcctViewWidget::showEvent(QShowEvent* e)
 {
     QWidget::showEvent(e);
-    if (!initialized_) InitOcct();
+    //if (!initialized_) InitOcct();
 }
 
 void OcctViewWidget::mousePressEvent(QMouseEvent* e)
