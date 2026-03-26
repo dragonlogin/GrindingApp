@@ -28,6 +28,7 @@
 #include <AIS_Trihedron.hxx>
 
 #include "OcctViewWidget.h"
+#include "JogPanel.h"
 #include "StepImporter.h"
 #include "StlLoader.h"
 #include "RobotDisplay.h"
@@ -164,48 +165,12 @@ void MainWindow::SetupCentralWidget()
 
 void MainWindow::SetupJogPanel()
 {
-    auto dock   = new QDockWidget(tr("Joint Jog"), this);
-    auto widget = new QWidget;
-    auto layout = new QGridLayout(widget);
-
-    const char* labels[6] = {"J1", "J2", "J3", "J4", "J5", "J6"};
-
-    for (int i = 0; i < 6; ++i) {
-        layout->addWidget(new QLabel(labels[i]), i, 0);
-
-        auto* slider = new QSlider(Qt::Horizontal);
-        slider->setRange(-1800, 1800);  // ±180° × 10
-        slider->setValue(0);
-        joint_sliders_[i] = slider;
-        layout->addWidget(slider, i, 1);
-
-        auto* spin = new QDoubleSpinBox;
-        spin->setRange(-180.0, 180.0);
-        spin->setDecimals(1);
-        spin->setSuffix("°");
-        spin->setValue(0.0);
-        joint_spinboxes_[i] = spin;
-        layout->addWidget(spin, i, 2);
-
-        connect(slider, &QSlider::valueChanged, this, [this, i, spin](int v) {
-            spin->blockSignals(true);
-            spin->setValue(v / 10.0);
-            spin->blockSignals(false);
-            joint_angles_[i] = v / 10.0;
-            UpdateRobotDisplay();
-        });
-        connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged),
-            this, [this, i, slider](double v) {
-                slider->blockSignals(true);
-                slider->setValue(qRound(v * 10));
-                slider->blockSignals(false);
-                joint_angles_[i] = v;
-                UpdateRobotDisplay();
-            });
-    }
-
-    dock->setWidget(widget);
-    addDockWidget(Qt::RightDockWidgetArea, dock);
+    jog_panel_ = new JogPanel(this);
+    connect(jog_panel_, &JogPanel::JointAnglesChanged, this, [this](const nl::utils::Q& angles) {
+        joint_angles_ = angles;
+        UpdateRobotDisplay();
+    });
+    addDockWidget(Qt::RightDockWidgetArea, jog_panel_);
 }
 
 void MainWindow::UpdateRobotDisplay()
@@ -403,10 +368,7 @@ void MainWindow::OnLoadRobot()
 
     current_robot_ = robot;
     joint_angles_ = nl::utils::Q(6, 0.0);
-    for (int i = 0; i < 6; ++i) {
-        if (joint_sliders_[i])   joint_sliders_[i]->setValue(0);
-        if (joint_spinboxes_[i]) joint_spinboxes_[i]->setValue(0.0);
-    }
+    if (jog_panel_) jog_panel_->SetJointAngles(joint_angles_);
 
     for (const RbDrawable& drw : robot.drawables) {
         TopoDS_Shape shape = StlLoader::Load(drw.mesh_file);

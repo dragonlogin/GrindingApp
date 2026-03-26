@@ -2,11 +2,13 @@ set(HEADERS
     GrindingUIExport.h
     MainWindow.h
     OcctViewWidget.h
+    JogPanel.h
 )
 
 set(SOURCES
     MainWindow.cpp
     OcctViewWidget.cpp
+    JogPanel.cpp
 )
 
 add_library(GrindingUI SHARED ${HEADERS} ${SOURCES})

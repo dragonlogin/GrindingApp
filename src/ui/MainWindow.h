@@ -6,8 +6,6 @@
 
 #include <QMainWindow>
 #include <QLabel>
-#include <QSlider>
-#include <QDoubleSpinBox>
 #include <QDockWidget>
 #include <QTreeWidget>
 
@@ -23,6 +21,7 @@ namespace nl {
 namespace ui {
 
 class OcctViewWidget;
+class JogPanel;
 
 class GRINDING_UI_EXPORT MainWindow : public QMainWindow
 {
@@ -75,9 +74,7 @@ private:
     std::vector<RobotMesh>  robot_meshes_;
     nl::core::RbRobot       current_robot_;
     nl::utils::Q            joint_angles_;
-
-    QSlider*        joint_sliders_[6]   = {};
-    QDoubleSpinBox* joint_spinboxes_[6] = {};
+    JogPanel*               jog_panel_ = nullptr;
 
     QTreeWidget*                        scene_tree_   = nullptr;
     std::vector<Handle(AIS_Trihedron)>  joint_frames_;
