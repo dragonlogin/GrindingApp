@@ -46,11 +46,15 @@ public:
     // Compute IK and update
     bool SetTcpPose(const gp_Trsf& target_pose, int tcp_ref_mode, std::vector<nl::utils::Q>& out_solutions);
 
+    void SetBaseTrsf(const gp_Trsf& trsf);
+    gp_Trsf GetBaseTrsf() const { return base_trsf_; }
+
     // Provide FK data for UI (e.g. TCP display)
     std::vector<gp_Trsf> GetCurrentFk() const;
     gp_Trsf GetToolTcpTrsf() const { return tool_tcp_trsf_; }
 
 signals:
+    void BaseTrsfChanged(const gp_Trsf& trsf);
     void RobotLoaded(const QString& name);
     void ToolLoaded(const QString& name);
     void JointAnglesChanged(const nl::utils::Q& angles);
@@ -79,6 +83,7 @@ private:
     Handle(AIS_Trihedron)               tool_tcp_frame_;
     gp_Trsf                             tool_base_trsf_;
     gp_Trsf                             tool_tcp_trsf_;
+    gp_Trsf                             base_trsf_;
 };
 
 } // namespace ui

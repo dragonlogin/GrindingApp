@@ -139,6 +139,13 @@ void RobotController::SetJointAngles(const nl::utils::Q& angles)
     UpdateRobotDisplay();
 }
 
+void RobotController::SetBaseTrsf(const gp_Trsf& trsf)
+{
+    base_trsf_ = trsf;
+    UpdateRobotDisplay();
+    emit BaseTrsfChanged(trsf);
+}
+
 void RobotController::UpdateRobotDisplay()
 {
     if (robot_meshes_.empty()) return;
@@ -155,7 +162,13 @@ void RobotController::UpdateRobotDisplay()
         gp_Trsf local = RpyPosTrsf(m.drawable.rpy, m.drawable.pos);
         int idx = joint_idx(m.drawable.ref_joint);
         if (idx >= 0) {
-            gp_Trsf world = fk[idx];
+            gp_Trsf world = base_trsf_;
+            world.Multiply(fk[idx]);
+            world.Multiply(local);
+            local = world;
+        }
+        else {
+            gp_Trsf world = base_trsf_;
             world.Multiply(local);
             local = world;
         }
@@ -164,13 +177,15 @@ void RobotController::UpdateRobotDisplay()
     UpdateCoordinateFrames(fk);
 
     if (!tool_ais_.IsNull() && !fk.empty()) {
-        gp_Trsf tool_world = fk.back();
+        gp_Trsf tool_world = base_trsf_;
+        tool_world.Multiply(fk.back());
         tool_world.Multiply(tool_base_trsf_);
         context_->SetLocation(tool_ais_, TopLoc_Location(tool_world));
 
         if (!tool_tcp_frame_.IsNull())
             context_->Remove(tool_tcp_frame_, Standard_False);
-        gp_Trsf tcp_world = fk.back();
+        gp_Trsf tcp_world = base_trsf_;
+        tcp_world.Multiply(fk.back());
         tcp_world.Multiply(tool_tcp_trsf_);
         tool_tcp_frame_ = MakeTrihedron(tcp_world, 40.0);
         context_->Display(tool_tcp_frame_, Standard_False);
@@ -187,12 +202,14 @@ void RobotController::UpdateCoordinateFrames(const std::vector<gp_Trsf>& fk)
         context_->Remove(t, Standard_False);
     joint_frames_.clear();
 
-    base_frame_ = MakeTrihedron(gp_Trsf(), 80.0);
+    base_frame_ = MakeTrihedron(base_trsf_, 80.0);
     context_->Display(base_frame_, Standard_False);
 
     int n = static_cast<int>(fk.size());
     for (int i = 0; i < n; ++i) {
-        Handle(AIS_Trihedron) tri = MakeTrihedron(fk[i], 50.0);
+        gp_Trsf joint_world = base_trsf_;
+        joint_world.Multiply(fk[i]);
+        Handle(AIS_Trihedron) tri = MakeTrihedron(joint_world, 50.0);
         context_->Display(tri, Standard_False);
 
         if (i < n - 1)

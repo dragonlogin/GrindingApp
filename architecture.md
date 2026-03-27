@@ -86,7 +86,8 @@ GrindingApp/
 │   │   ├── OcctViewWidget.h/cpp       # nl::ui::OcctViewWidget：Qt 封装 OCCT V3d_View
 │   │   ├── TrajectoryPlanner.h/cpp    # nl::ui::TrajectoryPlanner（MoveJ/MoveL + IK 规划）
 │   │   ├── TrajectoryPanel.h/cpp      # nl::ui::TrajectoryPanel（轨迹编辑表格 Dock）
-│   │   └── TrajectoryPlayer.h/cpp     # nl::ui::TrajectoryPlayer（回放控制 Dock）
+│   │   ├── TrajectoryPlayer.h/cpp     # nl::ui::TrajectoryPlayer（回放控制 Dock）
+│   │   └── MovementPanel.h/cpp        # nl::ui::MovementPanel（6-DOF 移动面板 Dock）
 │   ├── occ/
 │   │   ├── CMakeLists.txt             # GrindingOcc (SHARED DLL)
 │   │   ├── GrindingOccExport.h        # GRINDING_OCC_EXPORT 宏
@@ -150,6 +151,7 @@ GrindingApp/
 | `TrajectoryPlanner.h/cpp` | `nl::ui::TrajectoryPlanner`：MoveJ/MoveL 插值 + IK 求解 + 异常检测 |
 | `TrajectoryPanel.h/cpp` | `nl::ui::TrajectoryPanel`：右侧 Dock 轨迹编辑表格 + IK 选解 |
 | `TrajectoryPlayer.h/cpp` | `nl::ui::TrajectoryPlayer`：底部 Dock 回放控制（播放/暂停/停止/进度/速度） |
+| `MovementPanel.h/cpp` | `nl::ui::MovementPanel`：临时 6-DOF 移动面板（robot base / workpiece 共用） |
 
 ### `src/occ/` — GrindingOcc（OpenCASCADE 操作层）
 
@@ -263,6 +265,7 @@ RbXmlParser::Parse()          → RbRobot（DH参数 + STL路径）
 | 修改轨迹规划逻辑 | `src/ui/TrajectoryPlanner.cpp` → `Plan()` / `InterpolateMoveL()` |
 | 修改轨迹回放 | `src/ui/TrajectoryPlayer.cpp` + `MainWindow::OnPlaybackFrame()` |
 | 修改轨迹编辑表格 | `src/ui/TrajectoryPanel.cpp` |
+| 修改机器人/工件移动 | `src/ui/MovementPanel.cpp` + `MainWindow::OnMoveRobot/OnMoveWorkpiece()` |
 | 新增 occ 模块功能 | `src/occ/` 下新建文件 + `src/occ/CMakeLists.txt` |
 | 新增运动学功能 | `src/kinematics/` 下新建文件 + `src/kinematics/CMakeLists.txt` |
 

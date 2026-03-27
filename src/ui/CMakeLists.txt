@@ -11,6 +11,7 @@ set(MOC_HEADER
     RobotController.h
     TrajectoryPanel.h
     TrajectoryPlayer.h
+    MovementPanel.h
 )
 
 qt5_wrap_cpp(MOC_SOURCES ${MOC_HEADER})
@@ -24,6 +25,7 @@ set(SOURCES
     TrajectoryPanel.cpp
     TrajectoryPlayer.cpp
     Commands.cpp
+    MovementPanel.cpp
     ${MOC_SOURCES}
 )
 

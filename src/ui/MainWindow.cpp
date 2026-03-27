@@ -42,6 +42,7 @@
 #include "RobotDisplay.h"
 #include "TrajectoryPanel.h"
 #include "TrajectoryPlayer.h"
+#include "MovementPanel.h"
 
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <Quantity_Color.hxx>
@@ -225,7 +226,8 @@ void MainWindow::UpdateTcpPoseDisplay()
     std::vector<gp_Trsf> fk = controller_->GetCurrentFk();
     if (fk.empty()) return;
 
-    gp_Trsf pose_trsf = fk.back();
+    gp_Trsf pose_trsf = controller_->GetBaseTrsf();
+    pose_trsf.Multiply(fk.back());
     if (tcp_ref_mode_ == 1)
         pose_trsf.Multiply(controller_->GetToolTcpTrsf());
 
@@ -246,7 +248,6 @@ void MainWindow::OnPoseEdited(double x, double y, double z,
     nl::utils::Vector3d pos(x, y, z);
     gp_Trsf target = RpyPosTrsf(rpy, pos);
 
-    std::vector<nl::utils::Q> solutions;
     // We can use controller's helper if we adjust it, or calculate here:
     // If Tool TCP mode, compute flange target = target * tool_tcp^-1
     if (tcp_ref_mode_ == 1) {
@@ -254,7 +255,13 @@ void MainWindow::OnPoseEdited(double x, double y, double z,
         target.Multiply(tcp_inv);
     }
 
-    if (!nl::kinematics::ComputeIkAllSolutions(controller_->GetRobot(), target, controller_->GetJointAngles(), solutions)) {
+    // 世界坐标 → 机器人 base 坐标
+    gp_Trsf base_inv = controller_->GetBaseTrsf().Inverted();
+    gp_Trsf target_base = base_inv;
+    target_base.Multiply(target);
+
+    std::vector<nl::utils::Q> solutions;
+    if (!nl::kinematics::ComputeIkAllSolutions(controller_->GetRobot(), target_base, controller_->GetJointAngles(), solutions)) {
         statusBar()->showMessage(tr("IK: No solution found"), 3000);
         return;
     }
@@ -384,7 +391,12 @@ void MainWindow::OnSceneTreeContextMenu(const QPoint& pos)
         menu.addAction(tr("Toggle Frame Visibility"), [this, idx]() {
             controller_->ToggleJointFrame(idx);
         });
-    } else if (role == "workpiece") {
+    }
+    else if (role == "robot") {
+        menu.addAction(tr("Move"), this, &MainWindow::OnMoveRobot);
+    }
+    else if (role == "workpiece") {
+        menu.addAction(tr("Move"), this, &MainWindow::OnMoveWorkpiece);
         menu.addAction(tr("Generate Waypoints"), this, &MainWindow::OnGenerateWaypoints);
     }
 
@@ -478,6 +490,12 @@ void MainWindow::OnGenerateWaypoints()
     }
 
     waypoints_ = waypoint_gen_->Generate(waypoint_config_);
+    // 工件局部坐标 → 世界坐标
+    for (auto& wp : waypoints_) {
+        gp_Trsf world_pose = workpiece_trsf_;
+        world_pose.Multiply(wp.pose);
+        wp.pose = world_pose;
+    }
 
     if (waypoints_.empty()) {
         statusBar()->showMessage(tr("No waypoints generated for this surface"), 3000);
@@ -690,9 +708,18 @@ void MainWindow::OnPlanTrajectory(double approach_dist)
 
     planner_config_.approach_dist = approach_dist;
 
+    // 世界坐标 → 机器人 base 坐标
+    gp_Trsf base_inv = controller_->GetBaseTrsf().Inverted();
+    std::vector<nl::occ::Waypoint> base_wps = waypoints_;
+    for (auto& wp : base_wps) {
+        gp_Trsf t = base_inv;
+        t.Multiply(wp.pose);
+        wp.pose = t;
+    }
+
     TrajectoryPlanner planner;
     trajectory_ = planner.Plan(
-        waypoints_,
+        base_wps,
         controller_->GetRobot(),
         controller_->GetJointAngles(),
         planner_config_);
@@ -763,6 +790,122 @@ void MainWindow::OnClearTrajectory()
     traj_panel_->Clear();
     traj_player_->SetFrameCount(0);
     statusBar()->showMessage(tr("Trajectory cleared"), 3000);
+}
+
+void MainWindow::SetWorkpieceTrsf(const gp_Trsf& trsf)
+{
+    workpiece_trsf_ = trsf;
+    auto ctx = viewer_->Context();
+    if (!workpiece_ais_.IsNull())
+        ctx->SetLocation(workpiece_ais_, TopLoc_Location(trsf));
+    if (!selected_face_ais_.IsNull())
+        ctx->SetLocation(selected_face_ais_, TopLoc_Location(trsf));
+    ctx->UpdateCurrentViewer();
+}
+
+void MainWindow::OnMoveRobot()
+{
+    if (movement_panel_) return;  // 已有面板打开
+
+    move_target_ = MoveTarget::kRobot;
+    gp_Trsf current = controller_->GetBaseTrsf();
+
+    movement_panel_ = new MovementPanel(
+        QString::fromStdString(controller_->GetRobot().name), current, this);
+    addDockWidget(Qt::RightDockWidgetArea, movement_panel_);
+
+    connect(movement_panel_, &MovementPanel::PreviewRequested,
+        this, &MainWindow::OnMovePreview);
+    connect(movement_panel_, &MovementPanel::Accepted,
+        this, &MainWindow::OnMoveAccepted);
+    connect(movement_panel_, &MovementPanel::Cancelled,
+        this, &MainWindow::OnMoveCancelled);
+}
+
+void MainWindow::OnMoveWorkpiece()
+{
+    if (movement_panel_) return;
+
+    move_target_ = MoveTarget::kWorkpiece;
+
+    movement_panel_ = new MovementPanel(tr("Workpiece"), workpiece_trsf_, this);
+    addDockWidget(Qt::RightDockWidgetArea, movement_panel_);
+
+    connect(movement_panel_, &MovementPanel::PreviewRequested,
+        this, &MainWindow::OnMovePreview);
+    connect(movement_panel_, &MovementPanel::Accepted,
+        this, &MainWindow::OnMoveAccepted);
+    connect(movement_panel_, &MovementPanel::Cancelled,
+        this, &MainWindow::OnMoveCancelled);
+}
+
+void MainWindow::OnMovePreview(const gp_Trsf& trsf)
+{
+    if (move_target_ == MoveTarget::kRobot) {
+        controller_->SetBaseTrsf(trsf);
+    }
+    else if (move_target_ == MoveTarget::kWorkpiece) {
+        SetWorkpieceTrsf(trsf);
+    }
+}
+
+void MainWindow::OnMoveAccepted(const gp_Trsf& trsf)
+{
+    gp_Trsf old_trsf = movement_panel_->GetInitialTrsf();
+
+    if (move_target_ == MoveTarget::kRobot) {
+        undo_stack_->push(new CmdMoveBase(controller_, old_trsf, trsf));
+        if (!trajectory_.points.empty())
+            ReplanTrajectory();
+    }
+    else if (move_target_ == MoveTarget::kWorkpiece) {
+        auto apply = [this](const gp_Trsf& t) { SetWorkpieceTrsf(t); };
+        undo_stack_->push(new CmdMoveWorkpiece(apply, old_trsf, trsf));
+        TransformWaypointsAndTrajectory(old_trsf, trsf);
+    }
+
+    movement_panel_->deleteLater();
+    movement_panel_ = nullptr;
+    move_target_ = MoveTarget::kNone;
+}
+
+void MainWindow::OnMoveCancelled()
+{
+    gp_Trsf old_trsf = movement_panel_->GetInitialTrsf();
+
+    if (move_target_ == MoveTarget::kRobot)
+        controller_->SetBaseTrsf(old_trsf);
+    else if (move_target_ == MoveTarget::kWorkpiece)
+        SetWorkpieceTrsf(old_trsf);
+
+    movement_panel_->deleteLater();
+    movement_panel_ = nullptr;
+    move_target_ = MoveTarget::kNone;
+}
+
+void MainWindow::TransformWaypointsAndTrajectory(
+    const gp_Trsf& old_trsf, const gp_Trsf& new_trsf)
+{
+    if (waypoints_.empty()) return;
+
+    gp_Trsf delta = new_trsf;
+    delta.Multiply(old_trsf.Inverted());
+
+    for (auto& wp : waypoints_) {
+        gp_Trsf t = delta;
+        t.Multiply(wp.pose);
+        wp.pose = t;
+    }
+    DisplayWaypoints();
+
+    if (!trajectory_.points.empty())
+        ReplanTrajectory();
+}
+
+void MainWindow::ReplanTrajectory()
+{
+    if (waypoints_.empty()) return;
+    OnPlanTrajectory(planner_config_.approach_dist);
 }
 
 }

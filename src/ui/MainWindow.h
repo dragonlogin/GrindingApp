@@ -35,6 +35,7 @@ class JogPanel;
 class RobotController;
 class TrajectoryPanel;
 class TrajectoryPlayer;
+class MovementPanel;
 
 class GRINDING_UI_EXPORT MainWindow : public QMainWindow
 {
@@ -97,6 +98,16 @@ private:
     void OnPlaybackFinished();
     void OnClearTrajectory();
 
+    // Movement
+    void SetWorkpieceTrsf(const gp_Trsf& trsf);
+    void OnMoveRobot();
+    void OnMoveWorkpiece();
+    void OnMovePreview(const gp_Trsf& trsf);
+    void OnMoveAccepted(const gp_Trsf& trsf);
+    void OnMoveCancelled();
+    void TransformWaypointsAndTrajectory(const gp_Trsf& old_trsf, const gp_Trsf& new_trsf);
+    void ReplanTrajectory();
+
     QLabel*          model_info_;
     QLabel*          coord_label_;
     OcctViewWidget*  viewer_ = nullptr;
@@ -131,6 +142,12 @@ private:
     TrajectoryPlayer* traj_player_ = nullptr;
     nl::occ::Trajectory trajectory_;
     TrajectoryPlanner::Config planner_config_;
+
+    // Movement
+    gp_Trsf workpiece_trsf_;
+    MovementPanel* movement_panel_ = nullptr;
+    enum class MoveTarget { kNone, kRobot, kWorkpiece };
+    MoveTarget move_target_ = MoveTarget::kNone;
 };
 
 } // namespace ui

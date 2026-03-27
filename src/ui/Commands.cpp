@@ -38,5 +38,49 @@ bool CmdJogJoints::mergeWith(const QUndoCommand* other)
     return true;
 }
 
+// --- CmdMoveBase ---
+
+const int CMD_ID_MOVE_BASE = 2;
+
+CmdMoveBase::CmdMoveBase(RobotController* controller,
+                         const gp_Trsf& old_trsf, const gp_Trsf& new_trsf,
+                         QUndoCommand* parent)
+    : QUndoCommand(parent), controller_(controller), old_trsf_(old_trsf), new_trsf_(new_trsf)
+{
+    setText("Move Robot Base");
+}
+
+void CmdMoveBase::undo()
+{
+    controller_->SetBaseTrsf(old_trsf_);
+}
+
+void CmdMoveBase::redo()
+{
+    controller_->SetBaseTrsf(new_trsf_);
+}
+
+// --- CmdMoveWorkpiece ---
+
+const int CMD_ID_MOVE_WORKPIECE = 3;
+
+CmdMoveWorkpiece::CmdMoveWorkpiece(ApplyFn fn,
+                                   const gp_Trsf& old_trsf, const gp_Trsf& new_trsf,
+                                   QUndoCommand* parent)
+    : QUndoCommand(parent), apply_fn_(std::move(fn)), old_trsf_(old_trsf), new_trsf_(new_trsf)
+{
+    setText("Move Workpiece");
+}
+
+void CmdMoveWorkpiece::undo()
+{
+    apply_fn_(old_trsf_);
+}
+
+void CmdMoveWorkpiece::redo()
+{
+    apply_fn_(new_trsf_);
+}
+
 } // namespace ui
 } // namespace nl
