@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<TreeDevice name="HQ2">
+	<Frame name="Tool_Base">
+		<RPY>0 0 0</RPY>
+		<Pos>0 0 0</Pos>
+		<Drawable name="ToolUnit">
+			<RPY>0 0 0</RPY>
+			<Pos>0 0 0</Pos>
+			<Polytope file="Tool.stl" />
+		</Drawable>
+	</Frame>
+	<Frame name="TCP0" refframe="Tool_Base" />
+	<SerialChain name="TCP0">
+		<Frame name="TCP0" type="EndEffector">
+			<RPY>0 45 0</RPY>
+			<Pos>90 0 440</Pos>
+		</Frame>
+	</SerialChain>
+</TreeDevice>

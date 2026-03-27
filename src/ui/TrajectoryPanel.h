@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <QDockWidget>
+#include <gp_Trsf.hxx>
 
 #include "GrindingUIExport.h"
 #include "Trajectory.h"
@@ -23,6 +24,7 @@ class GRINDING_UI_EXPORT TrajectoryPanel : public QDockWidget {
 public:
     explicit TrajectoryPanel(QWidget* parent = nullptr);
 
+    void SetDisplayTransforms(const gp_Trsf& base_trsf, const gp_Trsf& tool_tcp_trsf);
     void SetTrajectory(const nl::occ::Trajectory& traj);
     void UpdatePoint(int index, const nl::occ::TrajectoryPoint& point);
     void SetIkSolutions(const std::vector<nl::utils::Q>& solutions);
@@ -47,8 +49,13 @@ private:
     QComboBox*       ik_combo_ = nullptr;
     QLabel*          summary_label_ = nullptr;
 
+    gp_Trsf FlangeBaseToTcpWorld(const gp_Trsf& flange_base) const;
+
     nl::occ::Trajectory trajectory_;
     int selected_row_ = -1;
+
+    gp_Trsf base_trsf_;
+    gp_Trsf tool_tcp_trsf_;
 };
 
 } // namespace ui

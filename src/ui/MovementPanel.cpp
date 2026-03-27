@@ -58,7 +58,7 @@ void MovementPanel::SetupUi(const QString& target_name)
 
 		grid->addWidget(new QLabel(units[i]), i, 2);
 
-		connect(spinboxes_[i], &QDoubleSpinBox::editingFinished,
+		connect(spinboxes_[i], &QDoubleSpinBox::textChanged,
 			this, &MovementPanel::OnSpinBoxEditingFinished);
 	}
 

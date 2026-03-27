@@ -75,6 +75,22 @@ void TrajectoryPanel::SetupUi()
     setWidget(widget);
 }
 
+void TrajectoryPanel::SetDisplayTransforms(const gp_Trsf& base_trsf,
+                                            const gp_Trsf& tool_tcp_trsf)
+{
+    base_trsf_ = base_trsf;
+    tool_tcp_trsf_ = tool_tcp_trsf;
+}
+
+gp_Trsf TrajectoryPanel::FlangeBaseToTcpWorld(const gp_Trsf& flange_base) const
+{
+    // tcp_world = base_trsf * flange_base * tool_tcp_trsf
+    gp_Trsf result = base_trsf_;
+    result.Multiply(flange_base);
+    result.Multiply(tool_tcp_trsf_);
+    return result;
+}
+
 void TrajectoryPanel::SetTrajectory(const nl::occ::Trajectory& traj)
 {
     trajectory_ = traj;
@@ -110,9 +126,10 @@ void TrajectoryPanel::PopulateTable()
             ? "MJ" : "ML";
         table_->setItem(i, 1, new QTableWidgetItem(type_str));
 
-        // TCP pose (X Y Z Rx Ry Rz)
+        // TCP pose in world coordinates
+        gp_Trsf tcp_world = FlangeBaseToTcpWorld(pt.tcp_pose);
         nl::utils::Vector3d rpy, pos;
-        nl::occ::TrsfToRpyPos(pt.tcp_pose, rpy, pos);
+        nl::occ::TrsfToRpyPos(tcp_world, rpy, pos);
         table_->setItem(i, 2, new QTableWidgetItem(
             QString::number(pos.x, 'f', 1)));
         table_->setItem(i, 3, new QTableWidgetItem(
@@ -185,9 +202,10 @@ void TrajectoryPanel::UpdatePoint(int index,
 
     trajectory_.points[index] = point;
 
-    // Refresh the single row
+    // Refresh the single row — display as TCP world coordinates
+    gp_Trsf tcp_world = FlangeBaseToTcpWorld(point.tcp_pose);
     nl::utils::Vector3d rpy, pos;
-    nl::occ::TrsfToRpyPos(point.tcp_pose, rpy, pos);
+    nl::occ::TrsfToRpyPos(tcp_world, rpy, pos);
 
     table_->item(index, 2)->setText(QString::number(pos.x, 'f', 1));
     table_->item(index, 3)->setText(QString::number(pos.y, 'f', 1));

@@ -568,6 +568,7 @@ void MainWindow::OnFacePicked()
         }
         selected_face_ais_ = new AIS_Shape(selected_face_);
         ctx->Display(selected_face_ais_, AIS_Shaded, 0, Standard_False);
+        ctx->SetLocation(selected_face_ais_, TopLoc_Location(workpiece_trsf_));
         ctx->SetColor(selected_face_ais_, Quantity_NOC_CYAN1, Standard_False);
         ctx->SetTransparency(selected_face_ais_, 0.4, Standard_False);
         ctx->UpdateCurrentViewer();
@@ -708,12 +709,22 @@ void MainWindow::OnPlanTrajectory(double approach_dist)
 
     planner_config_.approach_dist = approach_dist;
 
-    // 世界坐标 → 机器人 base 坐标
+    // 根据 waypoint 数量动态调整插值步数，总点数 ≤ 300
+    constexpr int kMaxPoints = 300;
+    int n_wp = static_cast<int>(waypoints_.size());
+    int movej = std::min(planner_config_.movej_steps, kMaxPoints / 4);
+    int movel = std::max(1, (kMaxPoints - movej) / std::max(n_wp, 1));
+    planner_config_.movej_steps = movej;
+    planner_config_.movel_steps_per_seg = movel;
+
+    // 世界坐标 → 机器人 base 坐标, 再 TCP → flange
     gp_Trsf base_inv = controller_->GetBaseTrsf().Inverted();
+    gp_Trsf tcp_inv = controller_->GetToolTcpTrsf().Inverted();
     std::vector<nl::occ::Waypoint> base_wps = waypoints_;
     for (auto& wp : base_wps) {
         gp_Trsf t = base_inv;
         t.Multiply(wp.pose);
+        t.Multiply(tcp_inv);
         wp.pose = t;
     }
 
@@ -724,6 +735,8 @@ void MainWindow::OnPlanTrajectory(double approach_dist)
         controller_->GetJointAngles(),
         planner_config_);
 
+    traj_panel_->SetDisplayTransforms(
+        controller_->GetBaseTrsf(), controller_->GetToolTcpTrsf());
     traj_panel_->SetTrajectory(trajectory_);
     traj_player_->SetFrameCount(
         static_cast<int>(trajectory_.points.size()));
