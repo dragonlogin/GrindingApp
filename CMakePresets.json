@@ -1,0 +1,51 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "vs2022-base",
+      "hidden": true,
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/vsbuild",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "/utf-8",
+        "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_MANIFEST_MODE": "OFF",
+        "VCPKG_INSTALLED_DIR": "C:/vcpkg/installed"
+      },
+      "environment": {
+        "VCPKG_ROOT": "C:/vcpkg"
+      }
+    },
+    {
+      "name": "vs2022-debug",
+      "displayName": "VS 2022 Debug",
+      "description": "Debug build using VS 2022 and vcpkg",
+      "inherits": "vs2022-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "vs2022-release",
+      "displayName": "VS 2022 Release",
+      "description": "Release build using VS 2022 and vcpkg",
+      "inherits": "vs2022-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "vs2022-debug-build",
+      "displayName": "Build Debug",
+      "configurePreset": "vs2022-debug"
+    },
+    {
+      "name": "vs2022-release-build",
+      "displayName": "Build Release",
+      "configurePreset": "vs2022-release"
+    }
+  ]
+}

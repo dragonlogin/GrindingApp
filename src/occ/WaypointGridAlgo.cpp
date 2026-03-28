@@ -49,7 +49,7 @@ std::vector<Waypoint> WaypointGridAlgo::Generate(
             if (config.approach_dist != 0.0)
                 pt.Translate(gp_Vec(normal) * config.approach_dist);
 
-            gp_Dir z_dir = normal;
+            gp_Dir z_dir = -normal;
             gp_Dir x_dir;
             if (props.IsTangentUDefined()) {
                 props.TangentU(x_dir);

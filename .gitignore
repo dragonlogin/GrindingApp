@@ -1,4 +1,5 @@
 build/
+vsbuild/
 .vs/
 .vscode/
 build_out.txt

@@ -2,11 +2,15 @@ set(HEADERS
     GrindingKinematicsExport.h
     IKinematicsSolver.h
     EigenSolver.h
+    KdlChainBuilder.h
+    KdlSolver.h
     RobotKinematics.h
 )
 
 set(SOURCES
     EigenSolver.cpp
+    KdlChainBuilder.cpp
+    KdlSolver.cpp
     RobotKinematics.cpp
 )
 
@@ -23,6 +27,7 @@ target_include_directories(GrindingKinematics PUBLIC
 target_link_libraries(GrindingKinematics PUBLIC
     GrindingCore
     Eigen3::Eigen
+    orocos-kdl
     TKernel TKMath TKG3d TKBRep
 )
 

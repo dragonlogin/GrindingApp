@@ -408,7 +408,7 @@ void MainWindow::OnLoadRobot()
 {
     QString path = QFileDialog::getOpenFileName(
         this, tr("Open Robot File"), "",
-        tr("Robot Files (*.xml)"));
+        tr("Robot Files (*.urdf)"));
     if (path.isEmpty()) return;
 
     if (controller_->LoadRobot(path.toStdString())) {

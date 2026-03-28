@@ -6,6 +6,7 @@
 #include <Eigen/Dense>
 #include <Eigen/SVD>
 
+#include "KdlSolver.h"
 #include "Q.h"
 
 namespace nl {
@@ -109,6 +110,128 @@ double JointDistance(const nl::utils::Q& a, const nl::utils::Q& b)
         sum += d * d;
     }
     return sum;
+}
+
+bool JacobianIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
+                const nl::utils::Q& init_angles, nl::utils::Q& out_angles);
+
+bool PoseNear(const Eigen::Matrix4d& a, const Eigen::Matrix4d& b,
+              double pos_tol = 0.1, double rot_tol = 1e-4)
+{
+    Eigen::Vector3d dp = a.block<3,1>(0, 3) - b.block<3,1>(0, 3);
+    if (dp.norm() > pos_tol) return false;
+
+    Eigen::Vector3d dr = RotError(a.block<3,3>(0, 0), b.block<3,3>(0, 0));
+    return dr.norm() <= rot_tol;
+}
+
+bool SolutionMatchesTarget(const nl::core::RbRobot& robot, const gp_Trsf& target,
+                           const nl::utils::Q& joint_angles)
+{
+    KdlSolver solver;
+    std::vector<gp_Trsf> fk = solver.ComputeFk(robot, joint_angles);
+    if (fk.empty()) return false;
+    return PoseNear(GpTrsfToEigen(fk.back()), GpTrsfToEigen(target));
+}
+
+void NormalizeJointAngles(nl::utils::Q& angles)
+{
+    for (int i = 0; i < angles.size(); ++i)
+        angles[i] = NormalizeDeg(angles[i]);
+}
+
+bool AppendUniqueSolution(const nl::core::RbRobot& robot, const gp_Trsf& target,
+                          const nl::utils::Q& candidate,
+                          std::vector<nl::utils::Q>& out_solutions)
+{
+    nl::utils::Q normalized = candidate;
+    NormalizeJointAngles(normalized);
+
+    if (!SolutionMatchesTarget(robot, target, normalized))
+        return false;
+
+    for (const nl::utils::Q& existing : out_solutions) {
+        if (JointDistance(existing, normalized) < 1e-4)
+            return false;
+    }
+
+    out_solutions.push_back(normalized);
+    return true;
+}
+
+std::vector<nl::utils::Q> BuildIkSeedVariants(const nl::utils::Q& init_angles)
+{
+    std::vector<nl::utils::Q> seeds;
+
+    auto add_seed = [&](nl::utils::Q seed) {
+        NormalizeJointAngles(seed);
+        for (const nl::utils::Q& existing : seeds) {
+            if (JointDistance(existing, seed) < 1e-4)
+                return;
+        }
+        seeds.push_back(seed);
+    };
+
+    auto wrist_flip = [](const nl::utils::Q& q) {
+        nl::utils::Q flipped = q;
+        flipped[3] += 180.0;
+        flipped[4] = -flipped[4];
+        flipped[5] += 180.0;
+        return flipped;
+    };
+
+    auto shoulder_flip = [](const nl::utils::Q& q) {
+        nl::utils::Q flipped = q;
+        flipped[0] += 180.0;
+        flipped[1] = -flipped[1];
+        flipped[2] = -flipped[2];
+        return flipped;
+    };
+
+    add_seed(init_angles);
+    add_seed(wrist_flip(init_angles));
+    add_seed(shoulder_flip(init_angles));
+    add_seed(wrist_flip(shoulder_flip(init_angles)));
+
+    std::vector<nl::utils::Q> neutral_seeds = {
+        nl::utils::Q({0.0, -45.0, -45.0, 0.0,  45.0, 0.0}),
+        nl::utils::Q({0.0,  45.0, -90.0, 0.0, -45.0, 0.0}),
+        nl::utils::Q({180.0, -45.0, -45.0, 180.0,  45.0, 180.0}),
+        nl::utils::Q({180.0,  45.0, -90.0, 180.0, -45.0, 180.0}),
+        nl::utils::Q({90.0,  -30.0, -60.0, 90.0,  60.0, -90.0}),
+        nl::utils::Q({-90.0,  30.0, -60.0, -90.0, -60.0, 90.0}),
+    };
+
+    for (const nl::utils::Q& seed : neutral_seeds) {
+        add_seed(seed);
+        add_seed(wrist_flip(seed));
+    }
+
+    return seeds;
+}
+
+bool NumericalIkAll(const nl::core::RbRobot& robot, const gp_Trsf& target,
+                    const nl::utils::Q& init_angles,
+                    std::vector<nl::utils::Q>& out_solutions)
+{
+    out_solutions.clear();
+    KdlSolver solver;
+
+    for (const nl::utils::Q& seed : BuildIkSeedVariants(init_angles)) {
+        nl::utils::Q candidate(6, 0.0);
+        if (!solver.ComputeIk(robot, target, seed, candidate))
+            continue;
+        AppendUniqueSolution(robot, target, candidate, out_solutions);
+    }
+
+    if (out_solutions.empty()) return false;
+
+    std::sort(out_solutions.begin(), out_solutions.end(),
+        [&](const nl::utils::Q& a, const nl::utils::Q& b) {
+            return JointDistance(a, init_angles) < JointDistance(b, init_angles);
+        });
+
+    return true;
 }
 
 // Craig DH rotation matrix (3×3 only)
@@ -361,44 +484,22 @@ bool AnalyticalIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
 
 std::vector<gp_Trsf> ComputeFk(const nl::core::RbRobot& robot, const nl::utils::Q& joint_angles)
 {
-    int n = static_cast<int>(robot.joints.size());
-    Eigen::VectorXd q(n);
-    for (int i = 0; i < n; ++i)
-        q(i) = (robot.joints[i].offset_deg + (i < 6 ? joint_angles[i] : 0.0)) * kDeg;
-
-    std::vector<Eigen::Matrix4d> frames = FkFrames(robot, q);
-    std::vector<gp_Trsf> result(n);
-    for (int i = 0; i < n; ++i)
-        result[i] = EigenToGpTrsf(frames[i+1]);
-    return result;
+    KdlSolver solver;
+    return solver.ComputeFk(robot, joint_angles);
 }
 
 bool ComputeIk(const nl::core::RbRobot& robot, const gp_Trsf& target,
                const nl::utils::Q& init_angles, nl::utils::Q& out_angles)
 {
-    if (IsSphericalWrist(robot)) {
-        if (AnalyticalIk(robot, target, init_angles, out_angles))
-            return true;
-    }
-    return JacobianIk(robot, target, init_angles, out_angles);
+    KdlSolver solver;
+    return solver.ComputeIk(robot, target, init_angles, out_angles);
 }
 
 bool ComputeIkAllSolutions(const nl::core::RbRobot& robot, const gp_Trsf& target,
                             const nl::utils::Q& init_angles,
                             std::vector<nl::utils::Q>& solutions)
 {
-    if (IsSphericalWrist(robot)) {
-        if (AnalyticalIkAll(robot, target, init_angles, solutions))
-            return true;
-    }
-    // Jacobian fallback: single solution
-    nl::utils::Q sol(6, 0.0);
-    if (JacobianIk(robot, target, init_angles, sol)) {
-        solutions.clear();
-        solutions.push_back(sol);
-        return true;
-    }
-    return false;
+    return NumericalIkAll(robot, target, init_angles, solutions);
 }
 
 } // namespace kinematics

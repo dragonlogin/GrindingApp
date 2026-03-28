@@ -2,6 +2,9 @@
 #include <cmath>
 #include <vector>
 
+#include "Q.h"
+#include "RobotKinematics.h"
+
 using nl::core::RbRobot;
 using nl::core::RbJoint;
 using nl::utils::Vector3d;
@@ -32,9 +35,9 @@ gp_Trsf DhTrsf(double theta_deg, double d, double a, double alpha_deg)
 
 gp_Trsf RpyPosTrsf(const Vector3d& rpy, const Vector3d& pos)
 {
-    double cy = cos(rpy[0] * kDeg), sy = sin(rpy[0] * kDeg);  // rpy[0] = Z (yaw)
+    double cr = cos(rpy[0] * kDeg), sr = sin(rpy[0] * kDeg);  // rpy[0] = Z (yaw)
     double cp = cos(rpy[1] * kDeg), sp = sin(rpy[1] * kDeg);  // rpy[1] = Y (pitch)
-    double cr = cos(rpy[2] * kDeg), sr = sin(rpy[2] * kDeg);  // rpy[2] = X (roll)
+    double cy = cos(rpy[2] * kDeg), sy = sin(rpy[2] * kDeg);  // rpy[2] = X (roll)
 
     // R = Rz(rpy[0]) * Ry(rpy[1]) * Rx(rpy[2])
     gp_Trsf trsf;
@@ -48,18 +51,7 @@ gp_Trsf RpyPosTrsf(const Vector3d& rpy, const Vector3d& pos)
 
 std::vector<gp_Trsf> ComputeFkHome(const RbRobot& robot)
 {
-    std::vector<gp_Trsf> fk(robot.joints.size());
-    for (int i = 0; i < static_cast<int>(robot.joints.size()); ++i) {
-        const RbJoint& j = robot.joints[i];
-        gp_Trsf dh = DhTrsf(j.offset_deg, j.d, j.a, j.alpha_deg);
-        if (i == 0) {
-            fk[i] = dh;
-        } else {
-            fk[i] = fk[i - 1];
-            fk[i].Multiply(dh);
-        }
-    }
-    return fk;
+    return nl::kinematics::ComputeFk(robot, nl::utils::Q(6, 0.0));
 }
 
 void TrsfToRpyPos(const gp_Trsf& trsf, Vector3d& rpy, Vector3d& pos)

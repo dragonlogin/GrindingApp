@@ -34,6 +34,7 @@ target_include_directories(GrindingOcc PUBLIC
 
 target_link_libraries(GrindingOcc PUBLIC
     GrindingCore
+    GrindingKinematics
     TKernel TKMath TKG2d TKG3d TKGeomBase TKGeomAlgo TKBRep TKTopAlgo
     TKV3d TKOpenGl TKService TKMeshVS
     TKPrim TKBool TKBO TKFeat TKFillet TKOffset TKShHealing

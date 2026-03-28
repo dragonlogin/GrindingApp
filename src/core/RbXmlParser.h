@@ -21,13 +21,14 @@ struct RbJoint {
 struct RbDrawable {
     std::string name;
     std::string ref_joint;  // "Robot_Base" or "Joint1".."Joint6"
-    utils::Vector3d rpy;          // degrees: roll, pitch, yaw
+    utils::Vector3d rpy;          // degrees: yaw, pitch, roll
     utils::Vector3d pos;          // mm
     std::string mesh_file;  // absolute path (with .stl extension)
 };
 
 struct RbRobot {
     std::string name;
+    std::string source_path;  // absolute robot model path, now typically .urdf
     std::vector<RbJoint>    joints;
     std::vector<RbDrawable> drawables;
 };

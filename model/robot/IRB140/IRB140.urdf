@@ -56,7 +56,7 @@
   <!-- Joints (Craig DH → URDF: xyz=(a,0,d), rpy=(alpha,0,0)) -->
 
   <!-- J1: alpha=0,  a=0,    d=352, offset=0   -->
-  <joint name="joint1" type="revolute">
+  <joint name="joint1" type="revolute" offset_deg="0">
     <parent link="base_link"/><child link="link1"/>
     <origin xyz="0 0 352" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
@@ -64,7 +64,7 @@
   </joint>
 
   <!-- J2: alpha=-90, a=70,  d=0,   offset=90  -->
-  <joint name="joint2" type="revolute">
+  <joint name="joint2" type="revolute" offset_deg="90">
     <parent link="link1"/><child link="link2"/>
     <origin xyz="70 0 0" rpy="-1.5708 0 0"/>
     <axis xyz="0 0 1"/>
@@ -72,7 +72,7 @@
   </joint>
 
   <!-- J3: alpha=0,  a=-360, d=0,   offset=0   -->
-  <joint name="joint3" type="revolute">
+  <joint name="joint3" type="revolute" offset_deg="0">
     <parent link="link2"/><child link="link3"/>
     <origin xyz="-360 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
@@ -80,15 +80,15 @@
   </joint>
 
   <!-- J4: alpha=90, a=0,    d=380, offset=0   -->
-  <joint name="joint4" type="revolute">
+  <joint name="joint4" type="revolute" offset_deg="0">
     <parent link="link3"/><child link="link4"/>
-    <origin xyz="0 0 380" rpy="1.5708 0 0"/>
+    <origin xyz="0 -380 0" rpy="1.5708 0 0"/>
     <axis xyz="0 0 1"/>
     <limit lower="-3.4907" upper="3.4907" effort="0" velocity="0"/>
   </joint>
 
   <!-- J5: alpha=-90, a=0,   d=0,   offset=0   -->
-  <joint name="joint5" type="revolute">
+  <joint name="joint5" type="revolute" offset_deg="0">
     <parent link="link4"/><child link="link5"/>
     <origin xyz="0 0 0" rpy="-1.5708 0 0"/>
     <axis xyz="0 0 1"/>
@@ -96,7 +96,7 @@
   </joint>
 
   <!-- J6: alpha=90,  a=0,   d=0,   offset=0   -->
-  <joint name="joint6" type="revolute">
+  <joint name="joint6" type="revolute" offset_deg="0">
     <parent link="link5"/><child link="link6"/>
     <origin xyz="0 0 0" rpy="1.5708 0 0"/>
     <axis xyz="0 0 1"/>

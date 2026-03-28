@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake")
-set(CMAKE_PREFIX_PATH "C:/vcpkg/installed/x64-windows/share/cmake" CACHE PATH "")
+# vcpkg toolchain - set via CMakePresets or environment
+if(DEFINED ENV{VCPKG_ROOT})
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+endif()
+
 project(GrindingApp VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -13,9 +16,9 @@ set(CMAKE_AUTOUIC ON)
 # Windows MSVC compile options
 if(MSVC)
     add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
-    add_compile_options(/utf-8 /nologo)
-    set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG}   /utf-8")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /utf-8")
+    add_compile_options(/utf-8 /nologo /EHsc)
+    set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG}   /utf-8 /EHsc")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /utf-8 /EHsc")
     set(ENV{CL_UTF8} 1)
 endif()
 
@@ -24,6 +27,7 @@ find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL Xml Test)
 find_package(Qt5 OPTIONAL_COMPONENTS LinguistTools)
 find_package(OpenCASCADE REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(orocos_kdl CONFIG REQUIRED)
 
 # ── Sub-modules (SHARED libraries) ──────────────────────────────
 #   GrindingCore        src/
@@ -33,11 +37,12 @@ find_package(Eigen3 REQUIRED)
 add_subdirectory(src)
 
 # ── Translation (optional) ───────────────────────────────────────
+set(QM_FILES "")
 set(TS_FILES translations/zh_CN.ts)
 if(Qt5LinguistTools_FOUND)
     set(ALL_HEADERS
-        src/GrindingCoreExport.h
-        src/RbXmlParser.h
+        src/core/GrindingCoreExport.h
+        src/core/RbXmlParser.h
         src/ui/MainWindow.h
         src/ui/OcctViewWidget.h
         src/occ/StlLoader.h
@@ -46,7 +51,7 @@ if(Qt5LinguistTools_FOUND)
         src/kinematics/RobotKinematics.h
     )
     set(ALL_SOURCES
-        src/RbXmlParser.cpp
+        src/core/RbXmlParser.cpp
         src/ui/MainWindow.cpp
         src/ui/OcctViewWidget.cpp
         src/occ/StlLoader.cpp
