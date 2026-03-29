@@ -57,6 +57,20 @@ void FromKdlJoints(const KDL::JntArray& q, nl::utils::Q& joint_angles)
         joint_angles[i] = q(i) / kDeg;
 }
 
+std::vector<unsigned int> MovableSegmentIndices(const KDL::Chain& chain)
+{
+    std::vector<unsigned int> indices;
+    indices.reserve(chain.getNrOfJoints());
+    // The runtime chain may contain fixed tool segments, so FK results should
+    // be sampled only at movable segments to stay aligned with joint count.
+    for (unsigned int i = 0; i < chain.getNrOfSegments(); ++i) {
+        if (chain.getSegment(i).getJoint().getType() == KDL::Joint::Fixed)
+            continue;
+        indices.push_back(i + 1);
+    }
+    return indices;
+}
+
 } // namespace
 
 std::vector<gp_Trsf> KdlSolver::ComputeFk(
@@ -64,14 +78,17 @@ std::vector<gp_Trsf> KdlSolver::ComputeFk(
     const nl::utils::Q& joint_angles)
 {
     KDL::Chain chain = BuildKdlChain(robot, false);
+    if (chain.getNrOfJoints() == 0)
+        return {};
+
     KDL::ChainFkSolverPos_recursive solver(chain);
 
     KDL::JntArray q = ToKdlJoints(joint_angles);
+    const std::vector<unsigned int> movable_segments = MovableSegmentIndices(chain);
     std::vector<gp_Trsf> result;
-    result.reserve(robot.joints.size());
-    for (int i = 0; i < static_cast<int>(robot.joints.size()); ++i) {
+    result.reserve(movable_segments.size());
+    for (unsigned int segment_nr : movable_segments) {
         KDL::Frame frame;
-        const int segment_nr = (i + 1) * 2;
         if (solver.JntToCart(q, frame, segment_nr) < 0)
             return {};
         result.push_back(KdlFrameToGpTrsf(frame));
@@ -86,6 +103,9 @@ bool KdlSolver::ComputeIk(
     nl::utils::Q& out)
 {
     KDL::Chain chain = BuildKdlChain(robot, false);
+    if (chain.getNrOfJoints() == 0)
+        return false;
+
     KDL::ChainFkSolverPos_recursive fk_solver(chain);
     KDL::ChainIkSolverVel_pinv vel_solver(chain);
     KDL::JntArray q_min;

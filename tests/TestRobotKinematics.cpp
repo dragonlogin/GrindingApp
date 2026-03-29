@@ -43,6 +43,7 @@ private slots:
     void testKdlSolverMatchesManualAtHome();
     void testKdlSolverIkRoundTripWithParsedIrb140();
     void testBuildKdlChainFromUrdfdomForIrb2400();
+    void testBuildKdlChainWrapperMatchesDirectUrdfChainForIrb2400();
     void testParsedIrb2400UrdfLoadsRobotModel();
     void testMeshLoaderLoadsIrb2400StlMesh();
     void testTrsfToRpyPosRoundTrip();
@@ -562,6 +563,21 @@ void TestRobotKinematics::testBuildKdlChainFromUrdfdomForIrb2400()
     KDL::Frame tip;
     QVERIFY2(fk_solver.JntToCart(q_zero, tip) >= 0,
              "urdfdom-built KDL chain failed FK for IRB2400");
+}
+
+void TestRobotKinematics::testBuildKdlChainWrapperMatchesDirectUrdfChainForIrb2400()
+{
+    RbRobot robot = makeIrb2400();
+    QVERIFY2(!robot.joints.empty(), "Failed to load irb2400.urdf");
+
+    KDL::Chain wrapper_chain = nl::kinematics::BuildKdlChain(robot, false);
+    KDL::Chain direct_chain = nl::kinematics::BuildKdlChainFromUrdfFile(
+        QDir::cleanPath(makeIrb2400UrdfPath()).toStdString(), "base_link", "link_6");
+
+    QCOMPARE(wrapper_chain.getNrOfJoints(), direct_chain.getNrOfJoints());
+    QCOMPARE(wrapper_chain.getNrOfSegments(), direct_chain.getNrOfSegments());
+    QCOMPARE(wrapper_chain.getNrOfJoints(), 6u);
+    QCOMPARE(wrapper_chain.getNrOfSegments(), 6u);
 }
 
 void TestRobotKinematics::testParsedIrb2400UrdfLoadsRobotModel()

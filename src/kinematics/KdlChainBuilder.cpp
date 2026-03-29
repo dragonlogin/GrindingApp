@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <QDir>
@@ -27,15 +28,11 @@ namespace {
 
 constexpr double kDeg = M_PI / 180.0;
 
-struct UrdfJoint {
-    std::string name;
-    std::string type;
-    nl::utils::Vector3d xyz;
-    nl::utils::Vector3d rpy_rad;
-    nl::utils::Vector3d axis;
-    double offset_rad = 0.0;
-    double lower_rad = -std::numeric_limits<double>::infinity();
-    double upper_rad = std::numeric_limits<double>::infinity();
+struct UrdfChainSpec {
+    std::string base_link;
+    std::string flange_link;
+    std::string tool_link;
+    std::unordered_map<std::string, double> joint_offset_rad;
 };
 
 QString ResolveUrdfPath(const nl::core::RbRobot& robot)
@@ -53,23 +50,9 @@ QString ResolveUrdfPath(const nl::core::RbRobot& robot)
     return QDir::cleanPath(urdf_path);
 }
 
-nl::utils::Vector3d ParseTriple(const QString& text)
+bool LoadUrdfChainSpec(const QString& urdf_path, UrdfChainSpec& spec)
 {
-    nl::utils::Vector3d out;
-    const auto parts = text.split(' ', Qt::SkipEmptyParts);
-    if (parts.size() == 3) {
-        out[0] = parts[0].toDouble();
-        out[1] = parts[1].toDouble();
-        out[2] = parts[2].toDouble();
-    }
-    return out;
-}
-
-bool LoadUrdfJoints(const nl::core::RbRobot& robot, std::vector<UrdfJoint>& joints)
-{
-    joints.clear();
-    const QString urdf_path = ResolveUrdfPath(robot);
-    if (urdf_path.isEmpty()) return false;
+    spec = {};
 
     QFile file(urdf_path);
     if (!file.open(QIODevice::ReadOnly)) return false;
@@ -82,55 +65,47 @@ bool LoadUrdfJoints(const nl::core::RbRobot& robot, std::vector<UrdfJoint>& join
         return false;
 
     const QDomNodeList joint_nodes = doc.documentElement().elementsByTagName("joint");
-    int movable_index = 0;
+    // This project currently assumes a single serial chain and derives the
+    // runtime chain endpoints from the ordered URDF joint list.
+    std::string fallback_base_link;
+    std::string preferred_tool_link;
+    std::string trailing_fixed_link;
     for (int i = 0; i < joint_nodes.count(); ++i) {
-        const QDomElement el = joint_nodes.at(i).toElement();
-        UrdfJoint joint;
-        joint.name = el.attribute("name").toStdString();
-        joint.type = el.attribute("type").toStdString();
+        const QDomElement joint_el = joint_nodes.at(i).toElement();
+        const std::string joint_name = joint_el.attribute("name").toStdString();
+        const std::string joint_type = joint_el.attribute("type").toStdString();
+        const std::string parent_link =
+            joint_el.firstChildElement("parent").attribute("link").toStdString();
+        const std::string child_link =
+            joint_el.firstChildElement("child").attribute("link").toStdString();
 
-        const QDomElement origin_el = el.firstChildElement("origin");
-        if (!origin_el.isNull()) {
-            joint.xyz = ParseTriple(origin_el.attribute("xyz"));
-            joint.rpy_rad = ParseTriple(origin_el.attribute("rpy"));
+        if (fallback_base_link.empty() && !parent_link.empty())
+            fallback_base_link = parent_link;
+
+        if (joint_type != "fixed") {
+            if (spec.base_link.empty())
+                spec.base_link = parent_link;
+            spec.flange_link = child_link;
+
+            bool ok = false;
+            const double offset_deg = joint_el.attribute("offset_deg").toDouble(&ok);
+            if (ok)
+                spec.joint_offset_rad[joint_name] = offset_deg * kDeg;
+        } else {
+            trailing_fixed_link = child_link;
+            if (joint_name == "tool0" || joint_name == "tool_mount" ||
+                child_link == "tool0" || child_link == "tool_mount") {
+                preferred_tool_link = child_link;
+            }
         }
-
-        const QDomElement axis_el = el.firstChildElement("axis");
-        if (!axis_el.isNull())
-            joint.axis = ParseTriple(axis_el.attribute("xyz"));
-        else
-            joint.axis = {0.0, 0.0, 1.0};
-
-        if (joint.type != "fixed" &&
-            movable_index < static_cast<int>(robot.joints.size())) {
-            joint.offset_rad = robot.joints[movable_index].offset_deg * kDeg;
-            ++movable_index;
-        }
-
-        const QDomElement limit_el = el.firstChildElement("limit");
-        if (!limit_el.isNull()) {
-            joint.lower_rad = limit_el.attribute("lower").toDouble();
-            joint.upper_rad = limit_el.attribute("upper").toDouble();
-        }
-
-        joints.push_back(joint);
     }
 
-    return !joints.empty();
-}
+    if (spec.base_link.empty())
+        spec.base_link = fallback_base_link;
+    if (spec.tool_link.empty())
+        spec.tool_link = !preferred_tool_link.empty() ? preferred_tool_link : trailing_fixed_link;
 
-KDL::Frame MakeOriginFrame(const UrdfJoint& joint)
-{
-    KDL::Frame frame(
-        KDL::Rotation::RPY(joint.rpy_rad[0], joint.rpy_rad[1], joint.rpy_rad[2]),
-        KDL::Vector(joint.xyz[0], joint.xyz[1], joint.xyz[2]));
-    if (std::abs(joint.offset_rad) > 1e-12) {
-        frame = frame * KDL::Frame(
-            KDL::Rotation::Rot(
-                KDL::Vector(joint.axis[0], joint.axis[1], joint.axis[2]),
-                joint.offset_rad));
-    }
-    return frame;
+    return !spec.base_link.empty() && !spec.flange_link.empty();
 }
 
 KDL::Frame UrdfPoseToKdlFrame(const urdf::Pose& pose)
@@ -168,24 +143,6 @@ bool CollectUrdfJointPath(const urdf::ModelInterfaceSharedPtr& model,
     return false;
 }
 
-KDL::Joint MakeKdlJoint(const urdf::Joint& joint)
-{
-    const KDL::Vector origin(0.0, 0.0, 0.0);
-    const KDL::Vector axis(joint.axis.x, joint.axis.y, joint.axis.z);
-
-    switch (joint.type) {
-    case urdf::Joint::REVOLUTE:
-    case urdf::Joint::CONTINUOUS:
-        return KDL::Joint(joint.name, origin, axis, KDL::Joint::RotAxis);
-    case urdf::Joint::PRISMATIC:
-        return KDL::Joint(joint.name, origin, axis, KDL::Joint::TransAxis);
-    case urdf::Joint::FIXED:
-        return KDL::Joint(KDL::Joint::Fixed);
-    default:
-        return KDL::Joint(KDL::Joint::Fixed);
-    }
-}
-
 bool CollectUrdfLimits(const std::vector<urdf::JointSharedPtr>& joints,
                        KDL::JntArray& q_min,
                        KDL::JntArray& q_max)
@@ -216,78 +173,69 @@ bool CollectUrdfLimits(const std::vector<urdf::JointSharedPtr>& joints,
     return true;
 }
 
-} // namespace
-
-KDL::Chain BuildKdlChain(const nl::core::RbRobot& robot, bool include_tool_mount)
+KDL::Segment MakeKdlSegment(const urdf::Joint& joint,
+                            const std::unordered_map<std::string, double>& joint_offset_rad)
 {
-    KDL::Chain chain;
-    std::vector<UrdfJoint> urdf_joints;
-    if (!LoadUrdfJoints(robot, urdf_joints))
-        return chain;
-
-    for (const UrdfJoint& joint : urdf_joints) {
-        if (joint.type == "fixed") {
-            if (!include_tool_mount && joint.name == "tool_mount")
-                continue;
-
-            chain.addSegment(KDL::Segment(
-                joint.name,
-                KDL::Joint(KDL::Joint::Fixed),
-                MakeOriginFrame(joint)));
-            continue;
-        }
-
-        chain.addSegment(KDL::Segment(
-            joint.name + "_origin",
+    const KDL::Frame origin_frame = UrdfPoseToKdlFrame(joint.parent_to_joint_origin_transform);
+    if (joint.type == urdf::Joint::FIXED) {
+        return KDL::Segment(
+            joint.child_link_name,
             KDL::Joint(KDL::Joint::Fixed),
-            MakeOriginFrame(joint)));
+            origin_frame);
+    }
 
-        chain.addSegment(KDL::Segment(
+    const KDL::Vector joint_origin = origin_frame.p;
+    const KDL::Vector axis_in_joint_frame(joint.axis.x, joint.axis.y, joint.axis.z);
+    const KDL::Vector axis_in_parent_frame = origin_frame.M * axis_in_joint_frame;
+
+    double joint_offset = 0.0;
+    const auto found = joint_offset_rad.find(joint.name);
+    if (found != joint_offset_rad.end())
+        joint_offset = found->second;
+
+    // Mirror kdl_parser's URDF mapping:
+    // - joint origin is the axis point in the parent frame
+    // - joint axis is rotated into the parent frame
+    // - the full origin frame stays on the segment tip
+    // This yields parent->child = T_origin * R_axis(q + offset).
+    KDL::Joint kdl_joint;
+    switch (joint.type) {
+    case urdf::Joint::REVOLUTE:
+    case urdf::Joint::CONTINUOUS:
+        kdl_joint = KDL::Joint(
             joint.name,
-            KDL::Joint(
-                joint.name,
-                KDL::Vector(0.0, 0.0, 0.0),
-                KDL::Vector(joint.axis[0], joint.axis[1], joint.axis[2]),
-                KDL::Joint::RotAxis),
-            KDL::Frame::Identity()));
+            joint_origin,
+            axis_in_parent_frame,
+            KDL::Joint::RotAxis,
+            1.0,
+            joint_offset);
+        break;
+    case urdf::Joint::PRISMATIC:
+        kdl_joint = KDL::Joint(
+            joint.name,
+            joint_origin,
+            axis_in_parent_frame,
+            KDL::Joint::TransAxis,
+            1.0,
+            joint_offset);
+        break;
+    default:
+        kdl_joint = KDL::Joint(KDL::Joint::Fixed);
+        break;
     }
 
-    return chain;
+    return KDL::Segment(
+        joint.child_link_name,
+        kdl_joint,
+        origin_frame);
 }
 
-bool BuildKdlJointLimits(const nl::core::RbRobot& robot,
-                         KDL::JntArray& q_min,
-                         KDL::JntArray& q_max)
-{
-    std::vector<UrdfJoint> urdf_joints;
-    if (!LoadUrdfJoints(robot, urdf_joints))
-        return false;
-
-    int movable_count = 0;
-    for (const UrdfJoint& joint : urdf_joints) {
-        if (joint.type != "fixed") ++movable_count;
-    }
-
-    q_min.resize(movable_count);
-    q_max.resize(movable_count);
-
-    int idx = 0;
-    for (const UrdfJoint& joint : urdf_joints) {
-        if (joint.type == "fixed") continue;
-        q_min(idx) = joint.lower_rad;
-        q_max(idx) = joint.upper_rad;
-        ++idx;
-    }
-
-    return true;
-}
-
-KDL::Chain BuildKdlChainFromUrdfFile(const std::string& urdf_path,
-                                     const std::string& base_link,
-                                     const std::string& tip_link)
+KDL::Chain BuildKdlChainFromModel(const urdf::ModelInterfaceSharedPtr& model,
+                                  const std::string& base_link,
+                                  const std::string& tip_link,
+                                  const std::unordered_map<std::string, double>& joint_offset_rad)
 {
     KDL::Chain chain;
-    urdf::ModelInterfaceSharedPtr model = urdf::parseURDFFile(urdf_path);
     if (!model) return chain;
 
     std::vector<urdf::JointSharedPtr> joints;
@@ -295,13 +243,53 @@ KDL::Chain BuildKdlChainFromUrdfFile(const std::string& urdf_path,
         return chain;
 
     for (const auto& joint : joints) {
-        chain.addSegment(KDL::Segment(
-            joint->child_link_name,
-            MakeKdlJoint(*joint),
-            UrdfPoseToKdlFrame(joint->parent_to_joint_origin_transform)));
+        chain.addSegment(MakeKdlSegment(*joint, joint_offset_rad));
     }
 
     return chain;
+}
+
+} // namespace
+
+KDL::Chain BuildKdlChain(const nl::core::RbRobot& robot, bool include_tool_mount)
+{
+    const QString urdf_path = ResolveUrdfPath(robot);
+    if (urdf_path.isEmpty()) return {};
+
+    UrdfChainSpec spec;
+    if (!LoadUrdfChainSpec(urdf_path, spec))
+        return {};
+
+    const std::string tip_link =
+        (include_tool_mount && !spec.tool_link.empty()) ? spec.tool_link : spec.flange_link;
+    return BuildKdlChainFromUrdfFile(urdf_path.toStdString(), spec.base_link, tip_link);
+}
+
+bool BuildKdlJointLimits(const nl::core::RbRobot& robot,
+                         KDL::JntArray& q_min,
+                         KDL::JntArray& q_max)
+{
+    const QString urdf_path = ResolveUrdfPath(robot);
+    if (urdf_path.isEmpty()) return false;
+
+    UrdfChainSpec spec;
+    if (!LoadUrdfChainSpec(urdf_path, spec))
+        return false;
+
+    return BuildKdlJointLimitsFromUrdfFile(
+        urdf_path.toStdString(), spec.base_link, spec.flange_link, q_min, q_max);
+}
+
+KDL::Chain BuildKdlChainFromUrdfFile(const std::string& urdf_path,
+                                     const std::string& base_link,
+                                     const std::string& tip_link)
+{
+    const QString urdf_path_q = QString::fromStdString(urdf_path);
+    UrdfChainSpec spec;
+    LoadUrdfChainSpec(urdf_path_q, spec);
+
+    urdf::ModelInterfaceSharedPtr model = urdf::parseURDFFile(urdf_path);
+    return BuildKdlChainFromModel(model, base_link, tip_link, spec.joint_offset_rad);
 }
 
 bool BuildKdlJointLimitsFromUrdfFile(const std::string& urdf_path,
