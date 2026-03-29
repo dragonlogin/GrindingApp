@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include <QDebug>
+
 #include <kdl/chainfksolverpos_recursive.hpp>
 #include <kdl/chainiksolverpos_nr_jl.hpp>
 #include <kdl/chainiksolvervel_pinv.hpp>
@@ -95,7 +97,28 @@ bool KdlSolver::ComputeIk(
 
     KDL::JntArray q_init = ToKdlJoints(init);
     KDL::JntArray q_out(chain.getNrOfJoints());
-    const int rc = pos_solver.CartToJnt(q_init, GpTrsfToKdlFrame(target), q_out);
+    const KDL::Frame kdl_target = GpTrsfToKdlFrame(target);
+    const int rc = pos_solver.CartToJnt(q_init, kdl_target, q_out);
+
+    if (rc < 0) {
+        // --- 诊断：打印目标位姿 + 初始角 ---
+        const double px = kdl_target.p.x();
+        const double py = kdl_target.p.y();
+        const double pz = kdl_target.p.z();
+        double roll, pitch, yaw;
+        kdl_target.M.GetRPY(roll, pitch, yaw);
+        constexpr double kRad2Deg = 180.0 / M_PI;
+        qDebug() << "[IK FAIL] rc=" << rc
+                 << " target pos=(" << px << "," << py << "," << pz << ")"
+                 << " rpy=(" << roll*kRad2Deg << "," << pitch*kRad2Deg << "," << yaw*kRad2Deg << ") deg"
+                 << " dist_from_base=" << std::sqrt(px*px + py*py + pz*pz)
+                 << " init=[" << (init.size()>0?init[0]:0) << ","
+                              << (init.size()>1?init[1]:0) << ","
+                              << (init.size()>2?init[2]:0) << ","
+                              << (init.size()>3?init[3]:0) << ","
+                              << (init.size()>4?init[4]:0) << ","
+                              << (init.size()>5?init[5]:0) << "]";
+    }
 
     if (out.size() != static_cast<int>(chain.getNrOfJoints()))
         out = nl::utils::Q(static_cast<int>(chain.getNrOfJoints()), 0.0);
