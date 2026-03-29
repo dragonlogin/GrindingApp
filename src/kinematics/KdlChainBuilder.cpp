@@ -50,6 +50,86 @@ QString ResolveUrdfPath(const nl::core::RbRobot& robot)
     return QDir::cleanPath(urdf_path);
 }
 
+QString TripleDegreesToRadians(const QString& text)
+{
+    const auto parts = text.split(' ', Qt::SkipEmptyParts);
+    if (parts.size() != 3)
+        return text;
+
+    return QStringLiteral("%1 %2 %3")
+        .arg(parts[0].toDouble() * kDeg, 0, 'g', 16)
+        .arg(parts[1].toDouble() * kDeg, 0, 'g', 16)
+        .arg(parts[2].toDouble() * kDeg, 0, 'g', 16);
+}
+
+QString ScalarDegreesToRadians(const QString& text)
+{
+    bool ok = false;
+    const double value_deg = text.toDouble(&ok);
+    if (!ok)
+        return text;
+    return QString::number(value_deg * kDeg, 'g', 16);
+}
+
+bool JointUsesAngularLimits(const QString& joint_type)
+{
+    return joint_type == QStringLiteral("revolute") ||
+           joint_type == QStringLiteral("continuous");
+}
+
+QString LoadRobotUrdfRadiansXml(const QString& urdf_path)
+{
+    QFile file(urdf_path);
+    if (!file.open(QIODevice::ReadOnly)) return {};
+
+    QDomDocument doc;
+    QString err_msg;
+    int err_line = 0;
+    int err_col = 0;
+    if (!doc.setContent(file.readAll(), &err_msg, &err_line, &err_col))
+        return {};
+
+    const QDomNodeList joint_nodes = doc.documentElement().elementsByTagName(QStringLiteral("joint"));
+    for (int i = 0; i < joint_nodes.count(); ++i) {
+        QDomElement joint_el = joint_nodes.at(i).toElement();
+        const QString joint_type = joint_el.attribute(QStringLiteral("type")).toLower();
+
+        // Robot URDF files in this project keep all origin RPY values in
+        // degrees for readability. urdfdom/KDL still expect radians, so we
+        // rewrite only the XML that enters the runtime kinematics pipeline.
+        QDomElement origin_el = joint_el.firstChildElement(QStringLiteral("origin"));
+        if (!origin_el.hasAttribute(QStringLiteral("rpy")))
+            origin_el = QDomElement();
+        if (!origin_el.isNull()) {
+            origin_el.setAttribute(QStringLiteral("rpy"),
+                                   TripleDegreesToRadians(origin_el.attribute(QStringLiteral("rpy"))));
+        }
+
+        // Only angular joints use degree-based limit fields. Prismatic limits
+        // stay in linear units and must not be converted.
+        if (!JointUsesAngularLimits(joint_type))
+            continue;
+
+        QDomElement limit_el = joint_el.firstChildElement(QStringLiteral("limit"));
+        if (limit_el.isNull())
+            continue;
+        if (limit_el.hasAttribute(QStringLiteral("lower"))) {
+            limit_el.setAttribute(QStringLiteral("lower"),
+                                  ScalarDegreesToRadians(limit_el.attribute(QStringLiteral("lower"))));
+        }
+        if (limit_el.hasAttribute(QStringLiteral("upper"))) {
+            limit_el.setAttribute(QStringLiteral("upper"),
+                                  ScalarDegreesToRadians(limit_el.attribute(QStringLiteral("upper"))));
+        }
+        if (limit_el.hasAttribute(QStringLiteral("velocity"))) {
+            limit_el.setAttribute(QStringLiteral("velocity"),
+                                  ScalarDegreesToRadians(limit_el.attribute(QStringLiteral("velocity"))));
+        }
+    }
+
+    return doc.toString(-1);
+}
+
 bool LoadUrdfChainSpec(const QString& urdf_path, UrdfChainSpec& spec)
 {
     spec = {};
@@ -288,7 +368,8 @@ KDL::Chain BuildKdlChainFromUrdfFile(const std::string& urdf_path,
     UrdfChainSpec spec;
     LoadUrdfChainSpec(urdf_path_q, spec);
 
-    urdf::ModelInterfaceSharedPtr model = urdf::parseURDFFile(urdf_path);
+    const QString xml_radians = LoadRobotUrdfRadiansXml(urdf_path_q);
+    urdf::ModelInterfaceSharedPtr model = urdf::parseURDF(xml_radians.toStdString());
     return BuildKdlChainFromModel(model, base_link, tip_link, spec.joint_offset_rad);
 }
 
@@ -298,7 +379,8 @@ bool BuildKdlJointLimitsFromUrdfFile(const std::string& urdf_path,
                                      KDL::JntArray& q_min,
                                      KDL::JntArray& q_max)
 {
-    urdf::ModelInterfaceSharedPtr model = urdf::parseURDFFile(urdf_path);
+    const QString xml_radians = LoadRobotUrdfRadiansXml(QString::fromStdString(urdf_path));
+    urdf::ModelInterfaceSharedPtr model = urdf::parseURDF(xml_radians.toStdString());
     if (!model) return false;
 
     std::vector<urdf::JointSharedPtr> joints;

@@ -99,6 +99,15 @@ static Eigen::Vector3d parseUrdfTriple(const QString& text, const Eigen::Vector3
     return Eigen::Vector3d(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble());
 }
 
+static Eigen::Vector3d parseUrdfRpyDegreesAsRadians(const QString& text)
+{
+    // Robot URDF files in this repo store RPY values in degrees for authoring.
+    // Runtime KDL converts them back to radians before handing them to urdfdom,
+    // and the reference FK in tests needs the same conversion.
+    const Eigen::Vector3d deg = parseUrdfTriple(text, Eigen::Vector3d::Zero());
+    return deg * M_PI / 180.0;
+}
+
 static Eigen::Matrix4d makeUrdfOriginMatrix(const Eigen::Vector3d& xyz,
                                             const Eigen::Vector3d& rpy_rad)
 {
@@ -139,7 +148,7 @@ static std::vector<gp_Trsf> computeUrdfReferenceFk(const RbRobot& robot, const Q
         const Eigen::Vector3d xyz =
             parseUrdfTriple(origin_el.attribute("xyz"), Eigen::Vector3d::Zero());
         const Eigen::Vector3d rpy =
-            parseUrdfTriple(origin_el.attribute("rpy"), Eigen::Vector3d::Zero());
+            parseUrdfRpyDegreesAsRadians(origin_el.attribute("rpy"));
         current *= makeUrdfOriginMatrix(xyz, rpy);
 
         if (joint_type == QStringLiteral("fixed"))

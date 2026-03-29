@@ -11,6 +11,13 @@
 namespace nl {
 namespace ui {
 
+namespace {
+
+constexpr double kSceneMToUiMm = 1000.0;
+constexpr double kUiMmToSceneM = 0.001;
+
+} // namespace
+
 MovementPanel::MovementPanel(const QString& target_name,
 	const gp_Trsf& initial_trsf,
 	QWidget* parent)
@@ -23,9 +30,11 @@ MovementPanel::MovementPanel(const QString& target_name,
 	nl::utils::Vector3d rpy, pos;
 	nl::occ::TrsfToRpyPos(initial_trsf_, rpy, pos);
 
-	spinboxes_[0]->setValue(pos.x);
-	spinboxes_[1]->setValue(pos.y);
-	spinboxes_[2]->setValue(pos.z);
+	// Scene transforms are stored in metres, while the movement UI continues to
+	// present translations in millimetres.
+	spinboxes_[0]->setValue(pos.x * kSceneMToUiMm);
+	spinboxes_[1]->setValue(pos.y * kSceneMToUiMm);
+	spinboxes_[2]->setValue(pos.z * kSceneMToUiMm);
 	spinboxes_[3]->setValue(rpy.x);
 	spinboxes_[4]->setValue(rpy.y);
 	spinboxes_[5]->setValue(rpy.z);
@@ -97,9 +106,9 @@ void MovementPanel::OnSpinBoxEditingFinished()
 gp_Trsf MovementPanel::ComputeTrsf() const
 {
 	nl::utils::Vector3d pos{
-		spinboxes_[0]->value(),
-		spinboxes_[1]->value(),
-		spinboxes_[2]->value()
+		spinboxes_[0]->value() * kUiMmToSceneM,
+		spinboxes_[1]->value() * kUiMmToSceneM,
+		spinboxes_[2]->value() * kUiMmToSceneM
 	};
 	nl::utils::Vector3d rpy{
 		spinboxes_[3]->value(),

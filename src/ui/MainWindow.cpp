@@ -238,14 +238,16 @@ void MainWindow::UpdateTcpPoseDisplay()
     // Wait, earlier it was in MainWindow, let's check where it came from.
     // I will temporarily add a dummy or re-implement it if it's missing, but it should be in RobotKinematics.
     nl::occ::TrsfToRpyPos(pose_trsf, rpy, pos);
-    jog_panel_->SetTcpPose(pos[0], pos[1], pos[2], rpy[0], rpy[1], rpy[2]);
+    jog_panel_->SetTcpPose(pos[0] * 1000, pos[1] * 1000, pos[2] * 1000, rpy[0], rpy[1], rpy[2]);
 }
 
 void MainWindow::OnPoseEdited(double x, double y, double z,
                                double rx, double ry, double rz)
 {
     nl::utils::Vector3d rpy(rx, ry, rz);
-    nl::utils::Vector3d pos(x, y, z);
+    // JogPanel exposes TCP translations in millimetres, while runtime FK/IK
+    // now works in metres.
+    nl::utils::Vector3d pos(x * 0.001, y * 0.001, z * 0.001);
     gp_Trsf target = RpyPosTrsf(rpy, pos);
 
     // We can use controller's helper if we adjust it, or calculate here:
@@ -423,7 +425,7 @@ void MainWindow::OnLoadTool()
 {
     QString path = QFileDialog::getOpenFileName(
         this, tr("Load Tool"), "",
-        tr("Tool Files (*.tool *.xml)"));
+        tr("Tool Files (*.urdf)"));
     if (path.isEmpty()) return;
 
     if (!controller_->LoadTool(path.toStdString())) {

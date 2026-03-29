@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<robot name="Burr">
+  <!-- Project convention: tool origin RPY values are authored in degrees. -->
+  <link name="tool_base">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="Tool.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <link name="tool0"/>
+
+  <joint name="tool0_joint" type="fixed">
+    <parent link="tool_base"/>
+    <child link="tool0"/>
+    <origin xyz="0 -0.250 0.1065" rpy="0 0 90"/>
+  </joint>
+</robot>

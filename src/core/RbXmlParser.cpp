@@ -78,15 +78,16 @@ bool TryFillDrawableFromUrdfElement(const QDomElement& element,
 
     const QDomElement origin_el = element.firstChildElement("origin");
     const utils::Vector3d xyz = ParseTriple(origin_el.attribute("xyz"));
-    const utils::Vector3d rpy_rad = ParseTriple(origin_el.attribute("rpy"));
+    const utils::Vector3d rpy_deg = ParseTriple(origin_el.attribute("rpy"));
 
     drawable.name = drawable_name;
     drawable.ref_joint = ref_joint;
     drawable.pos = xyz;
-    // URDF stores roll-pitch-yaw in radians; RobotDisplay expects yaw-pitch-roll in degrees.
-    drawable.rpy[0] = rpy_rad[2] * kRadToDeg;
-    drawable.rpy[1] = rpy_rad[1] * kRadToDeg;
-    drawable.rpy[2] = rpy_rad[0] * kRadToDeg;
+    // Robot URDF files in this project store roll-pitch-yaw in degrees.
+    // RobotDisplay expects yaw-pitch-roll in degrees.
+    drawable.rpy[0] = rpy_deg[2];
+    drawable.rpy[1] = rpy_deg[1];
+    drawable.rpy[2] = rpy_deg[0];
     drawable.mesh_file = resolved_mesh.toStdString();
     return true;
 }
@@ -141,11 +142,15 @@ void ParseUrdf(const QDomElement& root, const QString& base_dir, RbRobot& robot)
         if (type != QStringLiteral("fixed")) {
             const QDomElement origin_el = joint_el.firstChildElement("origin");
             const utils::Vector3d xyz = ParseTriple(origin_el.attribute("xyz"));
-            const utils::Vector3d rpy_rad = ParseTriple(origin_el.attribute("rpy"));
+            // Robot URDF files in this project now store origin RPY directly in
+            // degrees. The KDL path converts them back to radians before
+            // handing the XML to urdfdom, while the display path keeps the
+            // degree values for RobotDisplay.
+            const utils::Vector3d rpy_deg = ParseTriple(origin_el.attribute("rpy"));
 
             RbJoint joint;
             joint.name = joint_name.toStdString();
-            joint.alpha_deg = rpy_rad[0] * kRadToDeg;
+            joint.alpha_deg = rpy_deg[0];
             joint.a = xyz[0];
             joint.d = xyz[2];
             joint.offset_deg = joint_el.attribute("offset_deg").toDouble();
