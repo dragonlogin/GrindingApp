@@ -7,10 +7,13 @@
 #include <QFileInfo>
 
 #include <Eigen/Dense>
+#include <kdl/chainfksolverpos_recursive.hpp>
 
 #include "RobotKinematics.h"
+#include "MeshLoader.h"
 #include "RobotDisplay.h"
 #include "RbXmlParser.h"
+#include "KdlChainBuilder.h"
 #include "KdlSolver.h"
 #include "Q.h"
 #include "Vector3d.h"
@@ -39,6 +42,9 @@ private slots:
     void testParsedIrb140SolutionsAreUniqueAtWristSingularity();
     void testKdlSolverMatchesManualAtHome();
     void testKdlSolverIkRoundTripWithParsedIrb140();
+    void testBuildKdlChainFromUrdfdomForIrb2400();
+    void testParsedIrb2400UrdfLoadsRobotModel();
+    void testMeshLoaderLoadsIrb2400StlMesh();
     void testTrsfToRpyPosRoundTrip();
 };
 
@@ -47,6 +53,17 @@ static RbRobot makeIrb140()
     const QString tests_dir = QFileInfo(QStringLiteral(__FILE__)).absolutePath();
     const QString urdf_path = QDir(tests_dir).absoluteFilePath("../model/robot/IRB140/urdf/IRB140.urdf");
     return nl::core::RbXmlParser::Parse(QDir::cleanPath(urdf_path).toStdString());
+}
+
+static QString makeIrb2400UrdfPath()
+{
+    const QString tests_dir = QFileInfo(QStringLiteral(__FILE__)).absolutePath();
+    return QDir(tests_dir).absoluteFilePath("../model/robot/irb2400/irb2400.urdf");
+}
+
+static RbRobot makeIrb2400()
+{
+    return nl::core::RbXmlParser::Parse(QDir::cleanPath(makeIrb2400UrdfPath()).toStdString());
 }
 
 static QString makeIrb140UrdfPath(const RbRobot& robot)
@@ -519,6 +536,52 @@ void TestRobotKinematics::testKdlSolverIkRoundTripWithParsedIrb140()
     std::vector<gp_Trsf> fk2 = solver.ComputeFk(robot, ik_result);
     QVERIFY2(trsfNearEqual(fk.back(), fk2.back(), 1e-4, 0.1),
              "KDL solver FK-IK-FK round-trip failed");
+}
+
+void TestRobotKinematics::testBuildKdlChainFromUrdfdomForIrb2400()
+{
+    const std::string urdf_path = QDir::cleanPath(makeIrb2400UrdfPath()).toStdString();
+    KDL::Chain chain = nl::kinematics::BuildKdlChainFromUrdfFile(
+        urdf_path, "base_link", "tool0");
+
+    QCOMPARE(chain.getNrOfJoints(), 6u);
+    QCOMPARE(chain.getNrOfSegments(), 7u);
+
+    KDL::JntArray q_min;
+    KDL::JntArray q_max;
+    QVERIFY2(nl::kinematics::BuildKdlJointLimitsFromUrdfFile(
+                 urdf_path, "base_link", "tool0", q_min, q_max),
+             "Failed to read IRB2400 joint limits from urdfdom");
+    QCOMPARE(q_min.rows(), 6u);
+    QCOMPARE(q_max.rows(), 6u);
+    QVERIFY(std::abs(q_min(1) + 1.7453) < 1e-4);
+    QVERIFY(std::abs(q_max(1) - 1.9199) < 1e-4);
+
+    KDL::ChainFkSolverPos_recursive fk_solver(chain);
+    KDL::JntArray q_zero(chain.getNrOfJoints());
+    KDL::Frame tip;
+    QVERIFY2(fk_solver.JntToCart(q_zero, tip) >= 0,
+             "urdfdom-built KDL chain failed FK for IRB2400");
+}
+
+void TestRobotKinematics::testParsedIrb2400UrdfLoadsRobotModel()
+{
+    RbRobot robot = makeIrb2400();
+    QCOMPARE(QString::fromStdString(robot.name), QStringLiteral("abb_irb2400"));
+    QCOMPARE(robot.joints.size(), 6u);
+    QVERIFY2(robot.drawables.size() >= 7, "IRB2400 URDF should expose base + 6 display meshes");
+    QVERIFY(QFileInfo(QString::fromStdString(robot.drawables.front().mesh_file)).exists());
+    QVERIFY2(QString::fromStdString(robot.drawables.front().mesh_file).endsWith(".stl", Qt::CaseInsensitive),
+             "IRB2400 import should currently prefer STL meshes for display");
+}
+
+void TestRobotKinematics::testMeshLoaderLoadsIrb2400StlMesh()
+{
+    RbRobot robot = makeIrb2400();
+    QVERIFY2(!robot.drawables.empty(), "IRB2400 URDF returned no drawables");
+
+    TopoDS_Shape shape = nl::occ::MeshLoader::Load(robot.drawables.front().mesh_file);
+    QVERIFY2(!shape.IsNull(), "MeshLoader failed to load IRB2400 STL mesh");
 }
 
 

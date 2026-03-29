@@ -23,7 +23,7 @@ struct RbDrawable {
     std::string ref_joint;  // "Robot_Base" or "Joint1".."Joint6"
     utils::Vector3d rpy;          // degrees: yaw, pitch, roll
     utils::Vector3d pos;          // mm
-    std::string mesh_file;  // absolute path (with .stl extension)
+    std::string mesh_file;  // absolute path to the selected display mesh
 };
 
 struct RbRobot {

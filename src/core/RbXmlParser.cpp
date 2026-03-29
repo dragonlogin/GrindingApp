@@ -54,6 +54,43 @@ QString ResolveMeshPath(const QString& base_dir, const QString& relative_path)
     return full;
 }
 
+bool MeshIsRenderableNow(const QString& mesh_path)
+{
+    return QFileInfo(mesh_path).suffix().compare(QStringLiteral("stl"), Qt::CaseInsensitive) == 0;
+}
+
+bool TryFillDrawableFromUrdfElement(const QDomElement& element,
+                                    const QString& base_dir,
+                                    const std::string& ref_joint,
+                                    const std::string& drawable_name,
+                                    RbDrawable& drawable)
+{
+    if (element.isNull()) return false;
+
+    const QDomElement mesh_el =
+        element.firstChildElement("geometry").firstChildElement("mesh");
+    if (mesh_el.isNull()) return false;
+
+    const QString resolved_mesh =
+        ResolveMeshPath(base_dir, mesh_el.attribute("filename"));
+    if (!MeshIsRenderableNow(resolved_mesh))
+        return false;
+
+    const QDomElement origin_el = element.firstChildElement("origin");
+    const utils::Vector3d xyz = ParseTriple(origin_el.attribute("xyz"));
+    const utils::Vector3d rpy_rad = ParseTriple(origin_el.attribute("rpy"));
+
+    drawable.name = drawable_name;
+    drawable.ref_joint = ref_joint;
+    drawable.pos = xyz;
+    // URDF stores roll-pitch-yaw in radians; RobotDisplay expects yaw-pitch-roll in degrees.
+    drawable.rpy[0] = rpy_rad[2] * kRadToDeg;
+    drawable.rpy[1] = rpy_rad[1] * kRadToDeg;
+    drawable.rpy[2] = rpy_rad[0] * kRadToDeg;
+    drawable.mesh_file = resolved_mesh.toStdString();
+    return true;
+}
+
 void ParseSerialDevice(const QDomElement& root, const QString& base_dir, RbRobot& robot)
 {
     const QDomNodeList dh_nodes = root.elementsByTagName("DHJoint");
@@ -133,28 +170,35 @@ void ParseUrdf(const QDomElement& root, const QString& base_dir, RbRobot& robot)
         for (QDomElement visual_el = link_el.firstChildElement("visual");
              !visual_el.isNull();
              visual_el = visual_el.nextSiblingElement("visual")) {
-            const QDomElement origin_el = visual_el.firstChildElement("origin");
-            const QDomElement mesh_el =
-                visual_el.firstChildElement("geometry").firstChildElement("mesh");
-            if (mesh_el.isNull()) continue;
-
-            const utils::Vector3d xyz = ParseTriple(origin_el.attribute("xyz"));
-            const utils::Vector3d rpy_rad = ParseTriple(origin_el.attribute("rpy"));
-
             RbDrawable drawable;
-            drawable.name = QStringLiteral("%1Visual%2")
-                                .arg(link_name)
-                                .arg(visual_index++)
-                                .toStdString();
-            drawable.ref_joint = ref_joint;
-            drawable.pos = xyz;
-            // URDF stores roll-pitch-yaw in radians; RobotDisplay expects yaw-pitch-roll in degrees.
-            drawable.rpy[0] = rpy_rad[2] * kRadToDeg;
-            drawable.rpy[1] = rpy_rad[1] * kRadToDeg;
-            drawable.rpy[2] = rpy_rad[0] * kRadToDeg;
-            drawable.mesh_file =
-                ResolveMeshPath(base_dir, mesh_el.attribute("filename")).toStdString();
-            robot.drawables.push_back(drawable);
+            const std::string drawable_name = QStringLiteral("%1Visual%2")
+                                                  .arg(link_name)
+                                                  .arg(visual_index)
+                                                  .toStdString();
+            if (TryFillDrawableFromUrdfElement(
+                    visual_el, base_dir, ref_joint, drawable_name, drawable)) {
+                robot.drawables.push_back(drawable);
+                ++visual_index;
+            }
+        }
+
+        if (visual_index > 0)
+            continue;
+
+        int collision_index = 0;
+        for (QDomElement collision_el = link_el.firstChildElement("collision");
+             !collision_el.isNull();
+             collision_el = collision_el.nextSiblingElement("collision")) {
+            RbDrawable drawable;
+            const std::string drawable_name = QStringLiteral("%1Collision%2")
+                                                  .arg(link_name)
+                                                  .arg(collision_index)
+                                                  .toStdString();
+            if (TryFillDrawableFromUrdfElement(
+                    collision_el, base_dir, ref_joint, drawable_name, drawable)) {
+                robot.drawables.push_back(drawable);
+                ++collision_index;
+            }
         }
     }
 }

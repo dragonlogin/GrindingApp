@@ -1,5 +1,6 @@
 set(HEADERS
     GrindingOccExport.h
+    MeshLoader.h
     StlLoader.h
     StepImporter.h
     RobotDisplay.h
@@ -13,6 +14,7 @@ set(HEADERS
 )
 
 set(SOURCES
+    MeshLoader.cpp
     StlLoader.cpp
     StepImporter.cpp
     RobotDisplay.cpp

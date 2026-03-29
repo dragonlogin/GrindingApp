@@ -10,7 +10,7 @@
 
 #include <Geom_Axis2Placement.hxx>
 
-#include "StlLoader.h"
+#include "MeshLoader.h"
 #include "RobotDisplay.h"
 #include "RobotKinematics.h"
 
@@ -57,10 +57,10 @@ bool RobotController::LoadRobot(const std::string& xml_path)
     robot_meshes_.clear();
 
     current_robot_ = robot;
-    joint_angles_ = nl::utils::Q(6, 0.0);
+    joint_angles_ = nl::utils::Q(static_cast<int>(current_robot_.joints.size()), 0.0);
 
     for (const RbDrawable& drw : robot.drawables) {
-        TopoDS_Shape shape = StlLoader::Load(drw.mesh_file);
+        TopoDS_Shape shape = MeshLoader::Load(drw.mesh_file);
         if (shape.IsNull()) continue;
 
         Handle(AIS_Shape) ais = new AIS_Shape(shape);
@@ -115,7 +115,7 @@ bool RobotController::LoadTool(const std::string& path_str)
     }
     tool_tcp_trsf_ = RpyPosTrsf(tcp_rpy, tcp_pos);
 
-    TopoDS_Shape shape = StlLoader::Load(stl_path.toStdString());
+    TopoDS_Shape shape = MeshLoader::Load(stl_path.toStdString());
     if (shape.IsNull()) return false;
 
     if (!tool_ais_.IsNull())

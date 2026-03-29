@@ -28,6 +28,8 @@ find_package(Qt5 OPTIONAL_COMPONENTS LinguistTools)
 find_package(OpenCASCADE REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(orocos_kdl CONFIG REQUIRED)
+find_package(assimp CONFIG REQUIRED)
+find_package(urdfdom CONFIG REQUIRED)
 
 # ── Sub-modules (SHARED libraries) ──────────────────────────────
 #   GrindingCore        src/
