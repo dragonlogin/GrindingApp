@@ -52,14 +52,14 @@ build/bin/Release/GrindingApp.exe
 
 1. 点击菜单栏 **File → Load Tool**，或按 `Ctrl+T`
 2. 导航到 `model/tool/Burr/` 目录
-3. 选择 `Burr.tool`，点击"打开"
+3. 选择 `Burr.urdf`，点击"打开"
 
 **验证：**
 - 工具模型出现在机器人末端（Joint6 法兰处）
 - 拖动关节滑块时，工具跟随末端一起运动
 - Station Manager 中 Joint6 节点下出现 `Burr` 子节点
 
-> 也可以加载 `model/tool/HQ2/HQ2.tool` 作为替代工具。
+> 也可以加载 `model/tool/HQ2/HQ2.urdf` 作为替代工具。
 
 ### 3. 导入工件
 
@@ -262,7 +262,7 @@ Station-1
 ```
 1. 启动程序         build/bin/Release/GrindingApp.exe
 2. 加载机器人       Ctrl+R → model/robot/IRB140/IRB140.rb.xml
-3. 加载工具         Ctrl+T → model/tool/Burr/Burr.tool
+3. 加载工具         Ctrl+T → model/tool/Burr/Burr.urdf
 4. 导入工件         Ctrl+O → 选择一个 .step 文件
 5. 选择面           Path → Select Face → 左键点击工件上的一个面
 6. 生成路径点       Ctrl+G（默认 Grid 模式）
