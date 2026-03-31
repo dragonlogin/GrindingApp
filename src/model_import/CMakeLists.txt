@@ -1,0 +1,41 @@
+set(TargetName ModelImport)
+
+set(Headers
+    IRobotImporter.h
+    IToolImporter.h
+    IProjectSerializer.h
+    ProjectStorageModel.h
+    RobotDefinition.h
+    ToolDefinition.h
+)
+ 
+set(Sources
+)
+ 
+add_library(${TargetName} INTERFACE)
+# target_sources(
+#     INTERFACE 
+#     ${Headers}
+#     ${Sources}
+# )
+ 
+target_compile_definitions(${TargetName} 
+    PRIVATE 
+    #GRINDING_UTILS_BUILDING_DLL
+)
+ 
+target_include_directories(${TargetName}  
+    INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(${TargetName}
+    INTERFACE
+    SSDomain  
+)
+
+ 
+set_target_properties(${TargetName} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+)

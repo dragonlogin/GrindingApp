@@ -19,13 +19,13 @@
 
 最终目标模块为：
 
-1. `GrindingFoundation`
-2. `GrindingDomain`
-3. `GrindingModelImport`
-4. `GrindingGeometry`
-5. `GrindingPlanning`
-6. `GrindingApplication`
-7. `GrindingQtDesktop`
+1. `Foundation`
+2. `Domain`
+3. `ModelImport`
+4. `Geometry`
+5. `Planning`
+6. `Application`
+7. `QtDesktop`
 
 建议最终目录：
 
@@ -45,20 +45,20 @@
 
 必须固定依赖方向：
 
-- `Foundation` 被所有模块依赖
-- `Domain` 只依赖 `Foundation`
-- `ModelImport` 依赖 `Foundation + Domain`
-- `Geometry` 依赖 `Foundation + Domain`
-- `Planning` 依赖 `Foundation + Domain + Geometry` 的稳定输入
-- `Application` 依赖 `Foundation + Domain + ModelImport/Geometry/Planning` 的抽象接口
-- `QtDesktop` 只依赖 `Application`
+- `SSFoundation` 被所有模块依赖
+- `SSDomain` 只依赖 `SSFoundation`
+- `SSModelImport` 依赖 `SSFoundation + SSDomain`
+- `SSGeometry` 依赖 `SSFoundation + SSDomain`
+- `SSPlanning` 依赖 `SSFoundation + SSDomain + SSGeometry` 的稳定输入
+- `SSApplication` 依赖 `SSFoundation + SSDomain + SSModelImport/SSGeometry/SSPlanning` 的抽象接口
+- `SSQtDesktop` 只依赖 `SSApplication`
 
 禁止出现：
 
-- `Domain -> Qt`
-- `Domain -> OCCT`
-- `Application -> QWidget/AIS`
-- `QtDesktop -> RobotKinematics/StepImporter/WaypointGenerator` 直连
+- `SSDomain -> Qt`
+- `SSDomain -> OCCT`
+- `SSApplication -> QWidget/AIS`
+- `SSQtDesktop -> RobotKinematics/StepImporter/WaypointGenerator` 直连
 - `Trajectory/Waypoint` 长期留在 `occ` 命名空间
 
 ---
@@ -97,13 +97,13 @@
 ### 新建 CMake targets
 
 新增：
-- `GrindingFoundation`
-- `GrindingDomain`
-- `GrindingModelImport`
-- `GrindingGeometry`
-- `GrindingPlanning`
-- `GrindingApplication`
-- `GrindingQtDesktop`
+- `SSFoundation`
+- `SSDomain`
+- `SSModelImport`
+- `SSGeometry`
+- `SSPlanning`
+- `SSApplication`
+- `SSQtDesktop`
 
 ### 当前 target 的过渡策略
 
@@ -118,7 +118,7 @@
 - 暂时保留旧 target
 - 新 target 先空壳创建
 - 分阶段迁移文件
-- `GrindingApp` 最终改为只链接 `GrindingQtDesktop`
+- `GrindingApp` 最终改为只链接 `SSQtDesktop`
 
 ### 目录骨架
 
