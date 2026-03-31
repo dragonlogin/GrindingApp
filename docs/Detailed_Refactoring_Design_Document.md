@@ -219,16 +219,7 @@ struct Pose {
 - `PoseConverters.h/.cpp` 可放 `geometry` 或 `foundation/interop`
 
 #### `JointState`
-由当前 `Q` 演进：
-```cpp
-struct JointState {
-    std::vector<double> values_deg;
-};
-```
-
-过渡期：
-- 保留 `Q`
-- 提供 `Q <-> JointState` 转换
+用当前 `Q`
 
 #### `Result<T>`
 ```cpp

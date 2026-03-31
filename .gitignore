@@ -5,3 +5,5 @@ vsbuild/
 build_out.txt
 rebuild_out.txt
 .claude/settings.local.json
+build-urdfdom
+.qwen

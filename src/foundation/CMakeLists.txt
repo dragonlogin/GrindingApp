@@ -1,25 +1,30 @@
 set(TargetName SSFoundation)
 
 set(Headers
+    FoundationExport.h
     Result.h
     Pose.h
     JointState.h
     Ids.h
     Error.h
+    UnitTypes.h
+    Conversions.h
 )
  
 set(Sources
+    Conversions.cpp
 )
  
-add_library(${TargetName} INTERFACE)
-# target_sources(
-#     PUBLIC
-#     ${Headers}
-# )
+add_library(${TargetName} SHARED "")
+target_sources( ${TargetName}
+    PRIVATE
+    ${Headers}
+    ${Sources}
+)
  
 target_compile_definitions(${TargetName} 
     PRIVATE 
-    #GRINDING_UTILS_BUILDING_DLL
+    FOUNDATION_EXPORT_DLL
 )
  
 target_include_directories(${TargetName}  
@@ -28,7 +33,11 @@ target_include_directories(${TargetName}
 )
 
 target_link_libraries(${TargetName}
-    INTERFACE
+    PUBLIC
+    GrindingUtils
+    TKernel
+    TKMath
+    TKG3d
 )
 
  

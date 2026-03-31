@@ -25,6 +25,7 @@ target_include_directories(GrindingKinematics PUBLIC
 )
 
 target_link_libraries(GrindingKinematics PUBLIC
+    SSFoundation
     GrindingCore
     Eigen3::Eigen
     orocos-kdl
