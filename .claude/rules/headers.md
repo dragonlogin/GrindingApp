@@ -1,8 +1,7 @@
 # 头文件规范
 
 ## Header Guard
-- 格式：`PROJECT_PATH_FILE_H_`
-- 例：`GRINDINGAPP_SRC_UI_JOG_PANEL_H_`
+- 统一使用 `#pragma once`，禁止 `#ifndef` 风格的 include guard
 
 ## Include 最小化（按优先级）
 

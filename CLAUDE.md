@@ -25,6 +25,7 @@ cd build && "D:/Program Files/Microsoft Visual Studio/2022/Professional/Common7/
 | `cmake-format.md` | 修改 CMakeLists.txt 时 |
 | `testing.md` | 写/改测试时 |
 | `doc-sync.md` | 新增/删除文件、改目录结构时 |
+| `design-patterns.md` | 写设计文档、架构方案、重构 plan 时 |
 
 ## Agent 角色索引
 
