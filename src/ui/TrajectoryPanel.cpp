@@ -10,8 +10,9 @@
 #include <QLabel>
 
 #include "RobotDisplay.h"
+#include "Conversions.h"
 
-using nl::occ::TrajectoryPoint;
+using domain::TrajectoryPoint;
 
 namespace nl {
 namespace ui {
@@ -91,7 +92,7 @@ gp_Trsf TrajectoryPanel::FlangeBaseToTcpWorld(const gp_Trsf& flange_base) const
     return result;
 }
 
-void TrajectoryPanel::SetTrajectory(const nl::occ::Trajectory& traj)
+void TrajectoryPanel::SetTrajectory(const domain::Trajectory& traj)
 {
     trajectory_ = traj;
     selected_row_ = -1;
@@ -122,12 +123,12 @@ void TrajectoryPanel::PopulateTable()
         table_->setItem(i, 0, new QTableWidgetItem(QString::number(i)));
 
         // Move type
-        QString type_str = (pt.move_type == TrajectoryPoint::MoveType::kMoveJ)
+        QString type_str = (pt.move_type == domain::MoveType::kMoveJ)
             ? "MJ" : "ML";
         table_->setItem(i, 1, new QTableWidgetItem(type_str));
 
         // TCP pose in world coordinates
-        gp_Trsf tcp_world = FlangeBaseToTcpWorld(pt.tcp_pose);
+        gp_Trsf tcp_world = FlangeBaseToTcpWorld(foundation::ToGpTrsf(pt.tcp_pose));
         nl::utils::Vector3d rpy, pos;
         nl::occ::TrsfToRpyPos(tcp_world, rpy, pos);
         table_->setItem(i, 2, new QTableWidgetItem(
@@ -146,9 +147,9 @@ void TrajectoryPanel::PopulateTable()
         // Status
         QString status_str;
         switch (pt.status) {
-        case TrajectoryPoint::Status::kOk:        status_str = "OK"; break;
-        case TrajectoryPoint::Status::kIkFailed:   status_str = "IK FAIL"; break;
-        case TrajectoryPoint::Status::kJointJump:  status_str = "JUMP"; break;
+        case domain::TrajectoryPointStatus::kOk:        status_str = "OK"; break;
+        case domain::TrajectoryPointStatus::kIkFailed:   status_str = "IK FAIL"; break;
+        case domain::TrajectoryPointStatus::kJointJump:  status_str = "JUMP"; break;
         }
         table_->setItem(i, 8, new QTableWidgetItem(status_str));
 
@@ -174,16 +175,16 @@ void TrajectoryPanel::PopulateTable()
 }
 
 void TrajectoryPanel::HighlightRow(int row,
-    nl::occ::TrajectoryPoint::Status status)
+    domain::TrajectoryPointStatus status)
 {
     QColor bg;
     switch (status) {
-    case TrajectoryPoint::Status::kOk:
+    case domain::TrajectoryPointStatus::kOk:
         return;  // Default background
-    case TrajectoryPoint::Status::kIkFailed:
+    case domain::TrajectoryPointStatus::kIkFailed:
         bg = QColor(255, 180, 180);  // Light red
         break;
-    case TrajectoryPoint::Status::kJointJump:
+    case domain::TrajectoryPointStatus::kJointJump:
         bg = QColor(255, 240, 180);  // Light yellow
         break;
     }
@@ -195,7 +196,7 @@ void TrajectoryPanel::HighlightRow(int row,
 }
 
 void TrajectoryPanel::UpdatePoint(int index,
-    const nl::occ::TrajectoryPoint& point)
+    const domain::TrajectoryPoint& point)
 {
     if (index < 0 || index >= static_cast<int>(trajectory_.points.size()))
         return;
@@ -203,7 +204,7 @@ void TrajectoryPanel::UpdatePoint(int index,
     trajectory_.points[index] = point;
 
     // Refresh the single row — display as TCP world coordinates
-    gp_Trsf tcp_world = FlangeBaseToTcpWorld(point.tcp_pose);
+    gp_Trsf tcp_world = FlangeBaseToTcpWorld(foundation::ToGpTrsf(point.tcp_pose));
     nl::utils::Vector3d rpy, pos;
     nl::occ::TrsfToRpyPos(tcp_world, rpy, pos);
 
@@ -216,9 +217,9 @@ void TrajectoryPanel::UpdatePoint(int index,
 
     QString status_str;
     switch (point.status) {
-    case TrajectoryPoint::Status::kOk:        status_str = "OK"; break;
-    case TrajectoryPoint::Status::kIkFailed:   status_str = "IK FAIL"; break;
-    case TrajectoryPoint::Status::kJointJump:  status_str = "JUMP"; break;
+    case domain::TrajectoryPointStatus::kOk:        status_str = "OK"; break;
+    case domain::TrajectoryPointStatus::kIkFailed:   status_str = "IK FAIL"; break;
+    case domain::TrajectoryPointStatus::kJointJump:  status_str = "JUMP"; break;
     }
     table_->item(index, 8)->setText(status_str);
 

@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace nl::foundation {
+namespace foundation {
 
 using ProjectId = std::string;
 using SceneId = std::string;
@@ -11,4 +11,4 @@ using GeometryId = std::string;
 using WaypointSetId = std::string;
 using TrajectoryId = std::string;
 
-} // namespace nl::foundation
+} // namespace foundation

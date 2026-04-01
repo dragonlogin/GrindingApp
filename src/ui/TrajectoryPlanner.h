@@ -2,8 +2,11 @@
 #define GRINDINGAPP_SRC_UI_TRAJECTORY_PLANNER_H_
 
 #include <vector>
-#include "Trajectory.h"
-#include "Waypoint.h"
+#include <gp_Trsf.hxx>
+
+#include "domain/Trajectory.h"
+#include "domain/Waypoint.h"
+#include "Q.h"
 #include "RbXmlParser.h"
 #include "GrindingUIExport.h"
 
@@ -19,25 +22,25 @@ public:
         double joint_jump_threshold = 30.0;
     };
 
-    nl::occ::Trajectory Plan(
-        const std::vector<nl::occ::Waypoint>& waypoints,
+    domain::Trajectory Plan(
+        const std::vector<domain::Waypoint>& waypoints,
         const nl::core::RbRobot& robot,
         const nl::utils::Q& current_angles,
         const Config& config);
 
     bool ResolveSinglePoint(
-        nl::occ::Trajectory& traj, int index,
+        domain::Trajectory& traj, int index,
         const nl::core::RbRobot& robot,
         int solution_index);
 
 private:
-    std::vector<nl::occ::TrajectoryPoint> InterpolateMoveJ(
+    std::vector<domain::TrajectoryPoint> InterpolateMoveJ(
         const nl::utils::Q& from,
         const nl::utils::Q& to,
         const gp_Trsf& target_pose,
         int steps);
 
-    std::vector<nl::occ::TrajectoryPoint> InterpolateMoveL(
+    std::vector<domain::TrajectoryPoint> InterpolateMoveL(
         const gp_Trsf& from_pose,
         const gp_Trsf& to_pose,
         const nl::core::RbRobot& robot,

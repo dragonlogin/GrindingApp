@@ -21,10 +21,10 @@
 #include "GrindingUIExport.h"
 #include "Q.h"
 #include "RbXmlParser.h"
-#include "Waypoint.h"
+#include "domain/Waypoint.h"
+#include "domain/Trajectory.h"
 #include "IWaypointAlgo.h"
 #include "WaypointGenerator.h"
-#include "Trajectory.h"
 #include "TrajectoryPlanner.h"
 
 namespace nl {
@@ -123,7 +123,7 @@ private:
     Handle(AIS_Shape)               workpiece_ais_;
     TopoDS_Shape                    workpiece_shape_;
     Handle(AIS_Shape)               waypoints_ais_;
-    std::vector<nl::occ::Waypoint>  waypoints_;
+    std::vector<domain::Waypoint>  waypoints_;
 
     // Surface picking
     enum class SelectionMode { kNone, kSelectFace };
@@ -140,7 +140,7 @@ private:
     // Trajectory
     TrajectoryPanel*  traj_panel_ = nullptr;
     TrajectoryPlayer* traj_player_ = nullptr;
-    nl::occ::Trajectory trajectory_;
+    domain::Trajectory trajectory_;
     TrajectoryPlanner::Config planner_config_;
 
     // Movement

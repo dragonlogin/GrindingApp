@@ -148,10 +148,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Tool Files (*.tool *.xml)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Failed to load tool.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -176,18 +172,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No waypoints generated for this surface</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 waypoints generated</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Surface selected, ready to generate waypoints</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Please select a valid surface</source>
         <translation type="unfinished"></translation>
     </message>
@@ -209,10 +193,6 @@
     </message>
     <message>
         <source>Planar Cut</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Clear Waypoints</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -253,6 +233,30 @@
     </message>
     <message>
         <source>Robot Files (*.urdf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tool Files (*.urdf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No way points generated for this surface</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 way points generated</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Surface selected, ready to generate way points</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Generate Way points</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear Way points</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

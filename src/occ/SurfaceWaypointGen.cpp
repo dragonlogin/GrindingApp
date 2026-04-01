@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "Conversions.h"
+
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepGProp.hxx>
 #include <BRepLProp_SLProps.hxx>
@@ -101,7 +103,7 @@ std::vector<Waypoint> GenerateGridWaypoints(
                 x_dir.Y(), y_dir.Y(), z_dir.Y(), pt.Y(),
                 x_dir.Z(), y_dir.Z(), z_dir.Z(), pt.Z());
 
-            result.push_back({pose, 1.0});
+            result.push_back({foundation::ToPose(pose), 1.0});
         }
     }
     return result;

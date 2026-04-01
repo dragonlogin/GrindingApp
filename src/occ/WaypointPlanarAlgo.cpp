@@ -2,6 +2,8 @@
 
 #include <cfloat>
 
+#include "Conversions.h"
+
 #include <BRepAlgoAPI_Section.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBndLib.hxx>
@@ -92,7 +94,7 @@ std::vector<Waypoint> WaypointPlanarAlgo::Generate(
                     trsf.SetTranslationPart(gp_Vec(new_pos));
                 }
 
-                result.push_back({trsf, 1.0});
+                result.push_back({foundation::ToPose(trsf), 1.0});
             }
         }
     }

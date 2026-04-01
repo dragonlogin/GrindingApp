@@ -6,17 +6,17 @@
 
 ```cmake
 # 正确
-set(HEADERS
+set(Headers
     Foo.h
     Bar.h
 )
 
-set(SOURCES
+set(Sources
     Foo.cpp
     Bar.cpp
 )
 
-add_library(MyLib SHARED ${HEADERS} ${SOURCES})
+add_library(MyLib SHARED ${Headers} ${Sources})
 ```
 
 ```cmake
@@ -25,9 +25,9 @@ add_library(MyLib SHARED Foo.h Foo.cpp Bar.h Bar.cpp)
 ```
 
 ## 变量命名
-- 头文件：`HEADERS`
-- 源文件：`SOURCES`
-- `HEADERS` 列在 `add_library` / `add_executable` 中，便于 IDE 分组显示
+- 头文件：`Headers`
+- 源文件：`Sources`
+- `Headers` 列在 `add_library` / `add_executable` 中，便于 IDE 分组显示
 
 ## DLL 导出宏
 - 每个 SHARED 库有自己的导出宏（如 `GRINDING_UI_EXPORT`）

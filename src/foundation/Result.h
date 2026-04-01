@@ -99,5 +99,4 @@ private:
     Error error_{};
 };
 
-
 } // namespace foundation

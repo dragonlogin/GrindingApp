@@ -6,10 +6,12 @@
 #include <gp_Quaternion.hxx>
 
 #include "RobotKinematics.h"
+#include "Q.h"
+#include "Conversions.h"
 
-using nl::occ::Trajectory;
-using nl::occ::TrajectoryPoint;
-using nl::occ::Waypoint;
+using domain::Trajectory;
+using domain::TrajectoryPoint;
+using domain::Waypoint;
 
 namespace nl {
 namespace ui {
@@ -51,13 +53,14 @@ std::vector<TrajectoryPoint> TrajectoryPlanner::InterpolateMoveJ(
         double t = static_cast<double>(i) / steps;
 
         TrajectoryPoint pt;
-        pt.move_type = TrajectoryPoint::MoveType::kMoveJ;
-        pt.joint_angles = nl::utils::Q(n);
+        pt.move_type = domain::MoveType::kMoveJ;
+        nl::utils::Q q(n);
         for (int j = 0; j < n; ++j) {
-            pt.joint_angles[j] = from[j] * (1.0 - t) + to[j] * t;
+            q[j] = from[j] * (1.0 - t) + to[j] * t;
         }
-        pt.tcp_pose = target_pose;
-        pt.status = TrajectoryPoint::Status::kOk;
+        pt.joint_state = foundation::ToJointState(q);
+        pt.tcp_pose = foundation::ToPose(target_pose);
+        pt.status = domain::TrajectoryPointStatus::kOk;
         result.push_back(pt);
     }
     return result;
@@ -118,23 +121,24 @@ std::vector<TrajectoryPoint> TrajectoryPlanner::InterpolateMoveL(
         double t = static_cast<double>(i) / steps;
 
         TrajectoryPoint pt;
-        pt.move_type = TrajectoryPoint::MoveType::kMoveL;
-        pt.tcp_pose = InterpolatePose(from_pose, to_pose, t);
-
+        pt.move_type = domain::MoveType::kMoveL;
+        gp_Trsf tcp_pose = InterpolatePose(from_pose, to_pose, t);
+        pt.tcp_pose = foundation::ToPose(tcp_pose);
         if (i == steps) {
             pt.waypoint_index = waypoint_index;
         }
 
         nl::utils::Q ik_result;
+        gp_Trsf tcp_pose_trsf = foundation::ToGpTrsf(pt.tcp_pose);
         bool ok = nl::kinematics::ComputeIk(
-            robot, pt.tcp_pose, prev_angles, ik_result);
+            robot, tcp_pose_trsf, prev_angles, ik_result);
 
         if (!ok) {
-            pt.status = TrajectoryPoint::Status::kIkFailed;
-            pt.joint_angles = prev_angles;
+            pt.status = domain::TrajectoryPointStatus::kIkFailed;
+            pt.joint_state = foundation::ToJointState(prev_angles);
         } else {
-            pt.joint_angles = ik_result;
-            pt.status = TrajectoryPoint::Status::kOk;
+            pt.joint_state = foundation::ToJointState(ik_result);
+            pt.status = domain::TrajectoryPointStatus::kOk;
             prev_angles = ik_result;
         }
 
@@ -153,7 +157,7 @@ Trajectory TrajectoryPlanner::Plan(
     if (waypoints.empty()) return traj;
 
     gp_Trsf approach_pose = ComputeApproachPose(
-        waypoints[0].pose, config.approach_dist);
+        foundation::ToGpTrsf(waypoints[0].pose), config.approach_dist);
 
     nl::utils::Q approach_q;
     bool approach_ok = nl::kinematics::ComputeIk(
@@ -167,10 +171,10 @@ Trajectory TrajectoryPlanner::Plan(
         }
     } else {
         TrajectoryPoint pt;
-        pt.tcp_pose = approach_pose;
-        pt.joint_angles = current_angles;
-        pt.move_type = TrajectoryPoint::MoveType::kMoveJ;
-        pt.status = TrajectoryPoint::Status::kIkFailed;
+        pt.tcp_pose = foundation::ToPose(approach_pose);
+        pt.joint_state = foundation::ToJointState(current_angles);
+        pt.move_type = domain::MoveType::kMoveJ;
+        pt.status = domain::TrajectoryPointStatus::kIkFailed;
         traj.points.push_back(pt);
     }
 
@@ -179,7 +183,7 @@ Trajectory TrajectoryPlanner::Plan(
 
     for (size_t i = 0; i < waypoints.size(); ++i) {
         auto movel_pts = InterpolateMoveL(
-            prev_pose, waypoints[i].pose,
+            prev_pose, foundation::ToGpTrsf(waypoints[i].pose),
             robot, prev_angles,
             config.movel_steps_per_seg,
             static_cast<int>(i));
@@ -190,24 +194,24 @@ Trajectory TrajectoryPlanner::Plan(
 
         if (!traj.points.empty()) {
             const auto& last = traj.points.back();
-            if (last.status == TrajectoryPoint::Status::kOk) {
-                prev_angles = last.joint_angles;
+            if (last.status == domain::TrajectoryPointStatus::kOk) {
+                prev_angles = foundation::ToQ(last.joint_state);
             }
-            prev_pose = waypoints[i].pose;
+            prev_pose = foundation::ToGpTrsf(waypoints[i].pose);
         }
     }
 
     // Post-process: detect joint jumps
     for (size_t i = 1; i < traj.points.size(); ++i) {
         auto& pt = traj.points[i];
-        if (pt.status != TrajectoryPoint::Status::kOk) continue;
+        if (pt.status != domain::TrajectoryPointStatus::kOk) continue;
 
         const auto& prev = traj.points[i - 1];
-        if (prev.status != TrajectoryPoint::Status::kOk) continue;
+        if (prev.status != domain::TrajectoryPointStatus::kOk) continue;
 
-        if (HasJointJump(prev.joint_angles, pt.joint_angles,
+        if (HasJointJump(foundation::ToQ(prev.joint_state), foundation::ToQ(pt.joint_state),
                          config.joint_jump_threshold)) {
-            pt.status = TrajectoryPoint::Status::kJointJump;
+            pt.status = domain::TrajectoryPointStatus::kJointJump;
         }
     }
 
@@ -225,15 +229,15 @@ bool TrajectoryPlanner::ResolveSinglePoint(
 
     nl::utils::Q seed;
     if (index > 0 && traj.points[index - 1].status ==
-        TrajectoryPoint::Status::kOk) {
-        seed = traj.points[index - 1].joint_angles;
+        domain::TrajectoryPointStatus::kOk) {
+        seed = foundation::ToQ(traj.points[index - 1].joint_state);
     } else {
-        seed = pt.joint_angles;
+        seed = foundation::ToQ(pt.joint_state);
     }
 
     std::vector<nl::utils::Q> solutions;
     if (!nl::kinematics::ComputeIkAllSolutions(
-            robot, pt.tcp_pose, seed, solutions)) {
+            robot, foundation::ToGpTrsf(pt.tcp_pose), seed, solutions)) {
         return false;
     }
 
@@ -242,14 +246,14 @@ bool TrajectoryPlanner::ResolveSinglePoint(
         return false;
     }
 
-    pt.joint_angles = solutions[solution_index];
-    pt.status = TrajectoryPoint::Status::kOk;
+    pt.joint_state = foundation::ToJointState(solutions[solution_index]);
+    pt.status = domain::TrajectoryPointStatus::kOk;
 
     if (index > 0) {
         const auto& prev = traj.points[index - 1];
-        if (prev.status == TrajectoryPoint::Status::kOk &&
-            HasJointJump(prev.joint_angles, pt.joint_angles, 30.0)) {
-            pt.status = TrajectoryPoint::Status::kJointJump;
+        if (prev.status == domain::TrajectoryPointStatus::kOk &&
+            HasJointJump(foundation::ToQ(prev.joint_state), foundation::ToQ(pt.joint_state), 30.0)) {
+            pt.status = domain::TrajectoryPointStatus::kJointJump;
         }
     }
 

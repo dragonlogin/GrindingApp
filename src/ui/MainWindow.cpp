@@ -46,6 +46,7 @@
 
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <Quantity_Color.hxx>
+#include "Conversions.h"
 
 using nl::occ::LargestFace;
 using nl::occ::StepImporter;
@@ -495,18 +496,18 @@ void MainWindow::OnGenerateWaypoints()
     // 工件局部坐标 → 世界坐标
     for (auto& wp : waypoints_) {
         gp_Trsf world_pose = workpiece_trsf_;
-        world_pose.Multiply(wp.pose);
-        wp.pose = world_pose;
+        world_pose.Multiply(foundation::ToGpTrsf(wp.pose));
+        wp.pose = foundation::ToPose(world_pose);
     }
 
     if (waypoints_.empty()) {
-        statusBar()->showMessage(tr("No waypoints generated for this surface"), 3000);
+        statusBar()->showMessage(tr("No way points generated for this surface"), 3000);
         return;
     }
 
     DisplayWaypoints();
     statusBar()->showMessage(
-        tr("%1 waypoints generated").arg(static_cast<int>(waypoints_.size())), 5000);
+        tr("%1 way points generated").arg(static_cast<int>(waypoints_.size())), 5000);
 }
 
 void MainWindow::OnViewFront()
@@ -582,7 +583,7 @@ void MainWindow::OnFacePicked()
         }
 
         selection_mode_ = SelectionMode::kNone;
-        statusBar()->showMessage(tr("Surface selected, ready to generate waypoints"));
+        statusBar()->showMessage(tr("Surface selected, ready to generate way points"));
         return;
     }
 
@@ -612,9 +613,9 @@ void MainWindow::SetupWaypointMenu()
     connect(planar_action, &QAction::triggered, this, &MainWindow::OnSetPlanarMode);
 
     path_menu->addSeparator();
-    path_menu->addAction(tr("Generate Waypoints"), this,
+    path_menu->addAction(tr("Generate Way points"), this,
         &MainWindow::OnGenerateWaypoints, QKeySequence("Ctrl+G"));
-    path_menu->addAction(tr("Clear Waypoints"), this,
+    path_menu->addAction(tr("Clear Way points"), this,
         &MainWindow::OnClearWaypoints);
     path_menu->addSeparator();
     path_menu->addAction(tr("Plan Trajectory"), this, [this]() {
@@ -665,7 +666,7 @@ void MainWindow::DisplayWaypoints()
 
     BRepBuilderAPI_MakePolygon poly;
     for (const auto& wp : waypoints_) {
-        const gp_XYZ& t = wp.pose.TranslationPart();
+        const gp_XYZ& t = foundation::ToGpTrsf(wp.pose).TranslationPart();
         poly.Add(gp_Pnt(t.X(), t.Y(), t.Z()));
     }
     if (poly.IsDone()) {
@@ -711,7 +712,7 @@ void MainWindow::OnPlanTrajectory(double approach_dist)
 
     planner_config_.approach_dist = approach_dist;
 
-    // 根据 waypoint 数量动态调整插值步数，总点数 ≤ 300
+    // 根据 way point 数量动态调整插值步数，总点数 ≤ 300
     constexpr int kMaxPoints = 300;
     int n_wp = static_cast<int>(waypoints_.size());
     int movej = std::min(planner_config_.movej_steps, kMaxPoints / 4);
@@ -722,12 +723,12 @@ void MainWindow::OnPlanTrajectory(double approach_dist)
     // 世界坐标 → 机器人 base 坐标, 再 TCP → flange
     gp_Trsf base_inv = controller_->GetBaseTrsf().Inverted();
     gp_Trsf tcp_inv = controller_->GetToolTcpTrsf().Inverted();
-    std::vector<nl::occ::Waypoint> base_wps = waypoints_;
+    std::vector<domain::Waypoint> base_wps = waypoints_;
     for (auto& wp : base_wps) {
         gp_Trsf t = base_inv;
-        t.Multiply(wp.pose);
+        t.Multiply(foundation::ToGpTrsf(wp.pose));
         t.Multiply(tcp_inv);
-        wp.pose = t;
+        wp.pose = foundation::ToPose(t);
     }
 
     TrajectoryPlanner planner;
@@ -760,15 +761,15 @@ void MainWindow::OnTrajectoryPointSelected(int index)
         return;
 
     const auto& pt = trajectory_.points[index];
-    if (pt.status != nl::occ::TrajectoryPoint::Status::kIkFailed) {
-        controller_->SetJointAngles(pt.joint_angles);
+    if (pt.status != domain::TrajectoryPointStatus::kIkFailed) {
+        controller_->SetJointAngles(foundation::ToQ(pt.joint_state));
     }
 
     // Show IK alternatives for this point
     std::vector<nl::utils::Q> solutions;
     nl::kinematics::ComputeIkAllSolutions(
-        controller_->GetRobot(), pt.tcp_pose,
-        pt.joint_angles, solutions);
+        controller_->GetRobot(), foundation::ToGpTrsf(pt.tcp_pose),
+        foundation::ToQ(pt.joint_state), solutions);
     traj_panel_->SetIkSolutions(solutions);
 }
 
@@ -778,7 +779,7 @@ void MainWindow::OnIkSolutionChanged(int point_index, int solution_index)
     if (planner.ResolveSinglePoint(trajectory_, point_index,
                                     controller_->GetRobot(), solution_index)) {
         traj_panel_->UpdatePoint(point_index, trajectory_.points[point_index]);
-        controller_->SetJointAngles(trajectory_.points[point_index].joint_angles);
+        controller_->SetJointAngles(foundation::ToQ(trajectory_.points[point_index].joint_state));
     }
 }
 
@@ -788,10 +789,10 @@ void MainWindow::OnPlaybackFrame(int index)
         return;
 
     const auto& pt = trajectory_.points[index];
-    if (pt.status == nl::occ::TrajectoryPoint::Status::kIkFailed)
+    if (pt.status == domain::TrajectoryPointStatus::kIkFailed)
         return;
 
-    controller_->SetJointAngles(pt.joint_angles);
+    controller_->SetJointAngles(foundation::ToQ(pt.joint_state));
 }
 
 void MainWindow::OnPlaybackFinished()
@@ -908,8 +909,8 @@ void MainWindow::TransformWaypointsAndTrajectory(
 
     for (auto& wp : waypoints_) {
         gp_Trsf t = delta;
-        t.Multiply(wp.pose);
-        wp.pose = t;
+        t.Multiply(foundation::ToGpTrsf(wp.pose));
+        wp.pose = foundation::ToPose(t);
     }
     DisplayWaypoints();
 

@@ -77,6 +77,11 @@ set(APP_SOURCES
 add_executable(GrindingApp ${QM_FILES} ${APP_SOURCES})
 
 # Links all four static modules; PUBLIC deps propagate transitively
+target_include_directories(GrindingApp
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 target_link_libraries(GrindingApp
     PRIVATE
     GrindingUtils
