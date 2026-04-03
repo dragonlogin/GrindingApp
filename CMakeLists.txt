@@ -84,6 +84,7 @@ target_include_directories(GrindingApp
 
 target_link_libraries(GrindingApp
     PRIVATE
+    SSDomain
     GrindingUtils
     GrindingOcc
     GrindingKinematics

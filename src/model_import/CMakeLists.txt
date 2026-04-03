@@ -1,4 +1,4 @@
-set(TargetName ModelImport)
+set(TargetName SSModelImport)
 
 set(Headers
     IRobotImporter.h

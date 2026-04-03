@@ -25,7 +25,7 @@
 #include "domain/Trajectory.h"
 #include "IWaypointAlgo.h"
 #include "WaypointGenerator.h"
-#include "TrajectoryPlanner.h"
+#include "planning/CartesianTrajectoryPlanner.h"
 
 namespace nl {
 namespace ui {
@@ -141,7 +141,8 @@ private:
     TrajectoryPanel*  traj_panel_ = nullptr;
     TrajectoryPlayer* traj_player_ = nullptr;
     domain::Trajectory trajectory_;
-    TrajectoryPlanner::Config planner_config_;
+    planning::CartesianTrajectoryPlanner planner_;
+    planning::PlanningRequest planner_config_;
 
     // Movement
     gp_Trsf workpiece_trsf_;

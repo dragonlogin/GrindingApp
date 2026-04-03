@@ -1,15 +1,22 @@
 set(TargetName SSDomain)
 
 set(Headers
+    DomainExport.h
     Waypoint.h
     WaypointSet.h
     Trajectory.h
 )
 
 set(Sources
+    DomainExports.cpp
 )
 
 add_library(${TargetName} SHARED ${Headers} ${Sources})
+
+target_compile_definitions(${TargetName}
+    PRIVATE
+    DOMAIN_EXPORT_DLL
+)
 
 target_include_directories(${TargetName}
     PUBLIC

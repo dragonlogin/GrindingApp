@@ -1,7 +1,6 @@
 set(HEADERS
     GrindingUIExport.h
     Commands.h
-    TrajectoryPlanner.h
 )
 
 set(MOC_HEADER
@@ -21,7 +20,6 @@ set(SOURCES
     OcctViewWidget.cpp
     JogPanel.cpp
     RobotController.cpp
-    TrajectoryPlanner.cpp
     TrajectoryPanel.cpp
     TrajectoryPlayer.cpp
     Commands.cpp
@@ -40,6 +38,8 @@ target_include_directories(GrindingUI PUBLIC
 
 target_link_libraries(GrindingUI PUBLIC
     SSFoundation
+    SSDomain
+    SSPlanning
     GrindingCore
     GrindingOcc
     GrindingKinematics

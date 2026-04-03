@@ -8,7 +8,7 @@
 namespace foundation {
 
 template <typename T>
-class Result {
+class [[nodiscard]] Result {
 public:
     static Result Ok(T value)
     {

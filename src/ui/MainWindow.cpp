@@ -702,57 +702,45 @@ void MainWindow::SetupTrajectoryPlayer()
             this, &MainWindow::OnPlaybackFinished);
 }
 
+
 void MainWindow::OnPlanTrajectory(double approach_dist)
 {
     if (waypoints_.empty()) {
         QMessageBox::warning(this, tr("Warning"),
-            tr("Generate waypoints first"));
+            tr("No waypoints. Please generate waypoints first."));
         return;
     }
 
-    planner_config_.approach_dist = approach_dist;
-
-    // 根据 way point 数量动态调整插值步数，总点数 ≤ 300
-    constexpr int kMaxPoints = 300;
-    int n_wp = static_cast<int>(waypoints_.size());
-    int movej = std::min(planner_config_.movej_steps, kMaxPoints / 4);
-    int movel = std::max(1, (kMaxPoints - movej) / std::max(n_wp, 1));
-    planner_config_.movej_steps = movej;
-    planner_config_.movel_steps_per_seg = movel;
-
-    // 世界坐标 → 机器人 base 坐标, 再 TCP → flange
-    gp_Trsf base_inv = controller_->GetBaseTrsf().Inverted();
+   	gp_Trsf base_inv = controller_->GetBaseTrsf().Inverted();
     gp_Trsf tcp_inv = controller_->GetToolTcpTrsf().Inverted();
-    std::vector<domain::Waypoint> base_wps = waypoints_;
-    for (auto& wp : base_wps) {
+    domain::WaypointSet ws;
+    for (const auto& wp : waypoints_) {
         gp_Trsf t = base_inv;
         t.Multiply(foundation::ToGpTrsf(wp.pose));
         t.Multiply(tcp_inv);
-        wp.pose = foundation::ToPose(t);
+        domain::Waypoint w;
+        w.pose = foundation::ToPose(t);
+        ws.points.push_back(w);
     }
 
-    TrajectoryPlanner planner;
-    trajectory_ = planner.Plan(
-        base_wps,
+    planning::PlanningRequest req = planner_config_;
+    req.approach_dist = approach_dist;
+
+    auto result = planner_.Plan(
         controller_->GetRobot(),
         controller_->GetJointAngles(),
-        planner_config_);
+        ws,
+        req);
 
-    traj_panel_->SetDisplayTransforms(
-        controller_->GetBaseTrsf(), controller_->GetToolTcpTrsf());
-    traj_panel_->SetTrajectory(trajectory_);
-    traj_player_->SetFrameCount(
-        static_cast<int>(trajectory_.points.size()));
-
-    if (trajectory_.HasErrors()) {
-        statusBar()->showMessage(
-            tr("Trajectory planned with %1 errors")
-                .arg(trajectory_.ErrorCount()), 5000);
-    } else {
-        statusBar()->showMessage(
-            tr("Trajectory planned: %1 points, ready to play")
-                .arg(static_cast<int>(trajectory_.points.size())), 5000);
+    if (!result) {
+        QMessageBox::warning(this, tr("Warning"),
+            QString::fromStdString(result.error().message));
+        return;
     }
+
+    trajectory_ = result.value();
+    traj_panel_->SetTrajectory(trajectory_);
+    //scene_->UpdateTrajectory(trajectory_);
 }
 
 void MainWindow::OnTrajectoryPointSelected(int index)
@@ -775,11 +763,10 @@ void MainWindow::OnTrajectoryPointSelected(int index)
 
 void MainWindow::OnIkSolutionChanged(int point_index, int solution_index)
 {
-    TrajectoryPlanner planner;
-    if (planner.ResolveSinglePoint(trajectory_, point_index,
-                                    controller_->GetRobot(), solution_index)) {
+    if (planner_.ResolveSinglePoint(trajectory_, point_index,
+        controller_->GetRobot(), solution_index)) {
         traj_panel_->UpdatePoint(point_index, trajectory_.points[point_index]);
-        controller_->SetJointAngles(foundation::ToQ(trajectory_.points[point_index].joint_state));
+        //scene_->UpdateTrajectoryPoint(point_index, trajectory_.points[point_index]);
     }
 }
 
