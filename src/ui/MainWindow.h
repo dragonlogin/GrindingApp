@@ -26,6 +26,7 @@
 #include "IWaypointAlgo.h"
 #include "WaypointGenerator.h"
 #include "planning/CartesianTrajectoryPlanner.h"
+#include "planning/KdlKinematicsService.h"
 
 namespace nl {
 namespace ui {
@@ -141,6 +142,7 @@ private:
     TrajectoryPanel*  traj_panel_ = nullptr;
     TrajectoryPlayer* traj_player_ = nullptr;
     domain::Trajectory trajectory_;
+    planning::KdlKinematicsService kin_service_;
     planning::CartesianTrajectoryPlanner planner_;
     planning::PlanningRequest planner_config_;
 

@@ -1,19 +1,23 @@
 set(TestName TestPlanning)
 
 set(Sources
-    TestRobotKinematics.cpp
+    TestKdlKinematicsService.cpp
 )
 
 add_executable(${TestName} ${Sources})
 
-target_link_libraries(${TestName} 
+target_include_directories(${TestName} PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(${TestName}
     PRIVATE
-    GrindingOcc
+    SSPlanning
     GrindingKinematics
     Qt5::Test
 )
 
-set_target_properties(${TestName}  PROPERTIES
+set_target_properties(${TestName} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 

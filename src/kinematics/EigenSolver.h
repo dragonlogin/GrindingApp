@@ -1,5 +1,4 @@
-#ifndef GRINDINGAPP_SRC_KINEMATICS_EIGEN_SOLVER_H_
-#define GRINDINGAPP_SRC_KINEMATICS_EIGEN_SOLVER_H_
+#pragma once
 
 #include "GrindingKinematicsExport.h"
 #include "IKinematicsSolver.h"
@@ -13,11 +12,11 @@ namespace kinematics {
 class GRINDING_KINEMATICS_EXPORT EigenSolver : public IKinematicsSolver {
 public:
     std::vector<gp_Trsf> ComputeFk(
-        const nl::core::RbRobot& robot,
+        const domain::Robot& robot,
         const nl::utils::Q& joint_angles) override;
 
     bool ComputeIk(
-        const nl::core::RbRobot& robot,
+        const domain::Robot& robot,
         const gp_Trsf& target,
         const nl::utils::Q& init,
         nl::utils::Q& out) override;
@@ -25,5 +24,3 @@ public:
 
 } // namespace kinematics
 } // namespace nl
-
-#endif  // GRINDINGAPP_SRC_KINEMATICS_EIGEN_SOLVER_H_

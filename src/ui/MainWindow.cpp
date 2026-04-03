@@ -38,7 +38,8 @@
 #include "WaypointGenerator.h"
 #include "WaypointGridAlgo.h"
 #include "WaypointPlanarAlgo.h"
-#include "RobotKinematics.h"
+#include "domain/Robot.h"
+#include "foundation/Conversions.h"
 #include "RobotDisplay.h"
 #include "TrajectoryPanel.h"
 #include "TrajectoryPlayer.h"
@@ -55,6 +56,24 @@ using nl::occ::RpyPosTrsf;
 
 namespace nl {
 namespace ui {
+
+// 临时转换：Phase 6/7 统一迁移后删除
+static domain::Robot ToDomainRobot(const nl::core::RbRobot& rb)
+{
+    domain::Robot r;
+    r.name = rb.name;
+    r.source_path = rb.source_path;
+    for (const auto& j : rb.joints) {
+        domain::RobotJoint dj;
+        dj.name = j.name;
+        dj.alpha_deg = j.alpha_deg;
+        dj.a_mm = j.a;
+        dj.d_mm = j.d;
+        dj.offset_deg = j.offset_deg;
+        r.joints.push_back(dj);
+    }
+    return r;
+}
 
 static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const std::string& role)
 {
@@ -82,6 +101,7 @@ static QTreeWidgetItem* FindNode(QTreeWidget* tree, const std::string& role)
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
+    , planner_(kin_service_)
 {
     setWindowTitle("GrindingApp");
 
@@ -264,9 +284,17 @@ void MainWindow::OnPoseEdited(double x, double y, double z,
     target_base.Multiply(target);
 
     std::vector<nl::utils::Q> solutions;
-    if (!nl::kinematics::ComputeIkAllSolutions(controller_->GetRobot(), target_base, controller_->GetJointAngles(), solutions)) {
-        statusBar()->showMessage(tr("IK: No solution found"), 3000);
-        return;
+    {
+        auto ik_result = kin_service_.ComputeIkAll(
+            ToDomainRobot(controller_->GetRobot()),
+            foundation::ToPose(target_base),
+            foundation::ToJointState(controller_->GetJointAngles()));
+        if (!ik_result) {
+            statusBar()->showMessage(tr("IK: No solution found"), 3000);
+            return;
+        }
+        for (const auto& js : ik_result.value())
+            solutions.push_back(foundation::ToQ(js));
     }
 
     current_ik_solutions_ = solutions;
@@ -727,8 +755,8 @@ void MainWindow::OnPlanTrajectory(double approach_dist)
     req.approach_dist = approach_dist;
 
     auto result = planner_.Plan(
-        controller_->GetRobot(),
-        controller_->GetJointAngles(),
+        ToDomainRobot(controller_->GetRobot()),
+        foundation::ToJointState(controller_->GetJointAngles()),
         ws,
         req);
 
@@ -755,16 +783,23 @@ void MainWindow::OnTrajectoryPointSelected(int index)
 
     // Show IK alternatives for this point
     std::vector<nl::utils::Q> solutions;
-    nl::kinematics::ComputeIkAllSolutions(
-        controller_->GetRobot(), foundation::ToGpTrsf(pt.tcp_pose),
-        foundation::ToQ(pt.joint_state), solutions);
+    {
+        auto ik_result = kin_service_.ComputeIkAll(
+            ToDomainRobot(controller_->GetRobot()),
+            pt.tcp_pose,
+            pt.joint_state);
+        if (ik_result) {
+            for (const auto& js : ik_result.value())
+                solutions.push_back(foundation::ToQ(js));
+        }
+    }
     traj_panel_->SetIkSolutions(solutions);
 }
 
 void MainWindow::OnIkSolutionChanged(int point_index, int solution_index)
 {
     if (planner_.ResolveSinglePoint(trajectory_, point_index,
-        controller_->GetRobot(), solution_index)) {
+        ToDomainRobot(controller_->GetRobot()), solution_index)) {
         traj_panel_->UpdatePoint(point_index, trajectory_.points[point_index]);
         //scene_->UpdateTrajectoryPoint(point_index, trajectory_.points[point_index]);
     }

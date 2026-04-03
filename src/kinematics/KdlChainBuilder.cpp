@@ -35,7 +35,7 @@ struct UrdfChainSpec {
     std::unordered_map<std::string, double> joint_offset_rad;
 };
 
-QString ResolveUrdfPath(const nl::core::RbRobot& robot)
+QString ResolveUrdfPath(const domain::Robot& robot)
 {
     if (robot.source_path.empty()) return {};
 
@@ -331,7 +331,7 @@ KDL::Chain BuildKdlChainFromModel(const urdf::ModelInterfaceSharedPtr& model,
 
 } // namespace
 
-KDL::Chain BuildKdlChain(const nl::core::RbRobot& robot, bool include_tool_mount)
+KDL::Chain BuildKdlChain(const domain::Robot& robot, bool include_tool_mount)
 {
     const QString urdf_path = ResolveUrdfPath(robot);
     if (urdf_path.isEmpty()) return {};
@@ -345,7 +345,7 @@ KDL::Chain BuildKdlChain(const nl::core::RbRobot& robot, bool include_tool_mount
     return BuildKdlChainFromUrdfFile(urdf_path.toStdString(), spec.base_link, tip_link);
 }
 
-bool BuildKdlJointLimits(const nl::core::RbRobot& robot,
+bool BuildKdlJointLimits(const domain::Robot& robot,
                          KDL::JntArray& q_min,
                          KDL::JntArray& q_max)
 {

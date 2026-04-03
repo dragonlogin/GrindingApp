@@ -2,20 +2,19 @@
 
 #include <cmath>
 
-// OCCT ÀàĞÍÖ»³öÏÖÔÚ .cpp£¬²»ÎÛÈ¾Í·ÎÄ¼ş ¡ª¡ª [Pimpl ¾«Éñ]
+// OCCT ç±»å‹åªåœ¨ .cpp ä¸­å¼•å…¥ [Pimpl ç²¾ç¥]
 #include <gp_Vec.hxx>
 #include <gp_Quaternion.hxx>
 #include <gp_Trsf.hxx>
 
-#include "RobotKinematics.h"
 #include "Q.h"
-#include "Conversions.h"
+#include "foundation/Conversions.h"
 
 using domain::Trajectory;
 using domain::TrajectoryPoint;
 using domain::Waypoint;
 
-// [Pimpl ¾«Éñ] ËùÓĞÒÀÀµ gp_Trsf µÄ helper ·ÅÄäÃû namespace£¬¶ÔÍâÍêÈ«²»¿É¼û
+// [Pimpl ç²¾ç¥] ä¾èµ– gp_Trsf çš„ helper æ”¾åŒ¿å namespaceï¼Œå¯¹å¤–ä¸å¯è§
 namespace {
 
 gp_Trsf ComputeApproachPose(const gp_Trsf& first_wp_pose, double approach_dist)
@@ -113,7 +112,8 @@ gp_Trsf InterpolatePose(const gp_Trsf& from, const gp_Trsf& to, double t)
 std::vector<TrajectoryPoint> InterpolateMoveL(
     const gp_Trsf& from_pose,
     const gp_Trsf& to_pose,
-    const nl::core::RbRobot& robot,
+    const domain::Robot& robot,
+    planning::IKinematicsService& kin,
     const nl::utils::Q& seed_angles,
     int steps,
     int waypoint_index)
@@ -134,18 +134,17 @@ std::vector<TrajectoryPoint> InterpolateMoveL(
             pt.waypoint_index = waypoint_index;
         }
 
-        nl::utils::Q ik_result;
-        gp_Trsf tcp_pose_trsf = foundation::ToGpTrsf(pt.tcp_pose);
-        bool ok = nl::kinematics::ComputeIk(robot, tcp_pose_trsf, prev_angles, ik_result);
+        auto ik_result = kin.ComputeIk(
+            robot, pt.tcp_pose, foundation::ToJointState(prev_angles));
 
-        if (!ok) {
+        if (!ik_result) {
             pt.status = domain::TrajectoryPointStatus::kIkFailed;
             pt.joint_state = foundation::ToJointState(prev_angles);
         }
         else {
-            pt.joint_state = foundation::ToJointState(ik_result);
+            pt.joint_state = ik_result.value();
             pt.status = domain::TrajectoryPointStatus::kOk;
-            prev_angles = ik_result;
+            prev_angles = foundation::ToQ(ik_result.value());
         }
 
         result.push_back(pt);
@@ -157,21 +156,18 @@ std::vector<TrajectoryPoint> InterpolateMoveL(
 
 namespace planning {
 
-// [Facade] µ÷ÓÃ·½Ö»Ğèµ÷Ò»¸ö Plan()£¬ÄÚ²¿Ë³ĞòÖ´ĞĞ£º
-//   1. ¼ÆËã approach pose
-//   2. MoveJ ²åÖµµ½ approach
-//   3. Öğ¶Î MoveL ²åÖµ + IK Çó½â
-//   4. joint jump ºó´¦Àí¼ì²é
-// [Result ¹ßÓÃ·¨] Ê§°ÜÊ±·µ»Ø Fail£¬³É¹¦Ê± Ok °ü¹ü½á¹û
+// [Facade] å¯¹å¤–ä¸€ä¸ªå…¥å£ï¼Œå†…éƒ¨å°è£… 5 æ­¥è§„åˆ’æµç¨‹
+// [Result æƒ¯ç”¨æ³•] å¤±è´¥æ—¶è¿”å› Failï¼ŒæˆåŠŸæ—¶ Ok æºå¸¦ç»“æœ
 foundation::Result<domain::Trajectory> CartesianTrajectoryPlanner::Plan(
-    const nl::core::RbRobot& robot,
-    const nl::utils::Q& current_angles,
+    const domain::Robot& robot,
+    const foundation::JointState& current_angles,
     const domain::WaypointSet& waypoints,
     const PlanningRequest& request)
 {
     if (waypoints.points.empty()) {
         return foundation::Result<domain::Trajectory>::Fail(
-            foundation::Error{ foundation::ErrorCode::kInvalidArgument, "CartesianTrajectoryPlanner: no waypoints" });
+            foundation::Error{ foundation::ErrorCode::kInvalidArgument,
+                "CartesianTrajectoryPlanner: no waypoints" });
     }
 
     Trajectory traj;
@@ -179,26 +175,30 @@ foundation::Result<domain::Trajectory> CartesianTrajectoryPlanner::Plan(
     gp_Trsf approach_pose = ComputeApproachPose(
         foundation::ToGpTrsf(waypoints.points[0].pose), request.approach_dist);
 
+    auto approach_result = kin_.ComputeIk(
+        robot, foundation::ToPose(approach_pose), current_angles);
+
+    nl::utils::Q current_q = foundation::ToQ(current_angles);
     nl::utils::Q approach_q;
-    bool approach_ok = nl::kinematics::ComputeIk(
-        robot, approach_pose, current_angles, approach_q);
+    bool approach_ok = approach_result.operator bool();
 
     if (approach_ok) {
+        approach_q = foundation::ToQ(approach_result.value());
         auto movej_pts = InterpolateMoveJ(
-            current_angles, approach_q, approach_pose, request.movej_steps);
+            current_q, approach_q, approach_pose, request.movej_steps);
         for (auto& pt : movej_pts)
             traj.points.push_back(std::move(pt));
     }
     else {
         TrajectoryPoint pt;
         pt.tcp_pose = foundation::ToPose(approach_pose);
-        pt.joint_state = foundation::ToJointState(current_angles);
+        pt.joint_state = current_angles;
         pt.move_type = domain::MoveType::kMoveJ;
         pt.status = domain::TrajectoryPointStatus::kIkFailed;
         traj.points.push_back(pt);
     }
 
-    nl::utils::Q prev_angles = approach_ok ? approach_q : current_angles;
+    nl::utils::Q prev_angles = approach_ok ? approach_q : current_q;
     gp_Trsf prev_pose = approach_pose;
 
     for (size_t i = 0; i < waypoints.points.size(); ++i) {
@@ -206,6 +206,7 @@ foundation::Result<domain::Trajectory> CartesianTrajectoryPlanner::Plan(
             prev_pose,
             foundation::ToGpTrsf(waypoints.points[i].pose),
             robot,
+            kin_,
             prev_angles,
             request.movel_steps_per_seg,
             static_cast<int>(i));
@@ -241,7 +242,7 @@ foundation::Result<domain::Trajectory> CartesianTrajectoryPlanner::Plan(
 bool CartesianTrajectoryPlanner::ResolveSinglePoint(
     domain::Trajectory& traj,
     int index,
-    const nl::core::RbRobot& robot,
+    const domain::Robot& robot,
     int solution_index)
 {
     if (index < 0 || index >= static_cast<int>(traj.points.size()))
@@ -249,27 +250,26 @@ bool CartesianTrajectoryPlanner::ResolveSinglePoint(
 
     auto& pt = traj.points[index];
 
-    nl::utils::Q seed;
+    foundation::JointState seed;
     if (index > 0 && traj.points[index - 1].status ==
         domain::TrajectoryPointStatus::kOk) {
-        seed = foundation::ToQ(traj.points[index - 1].joint_state);
+        seed = traj.points[index - 1].joint_state;
     }
     else {
-        seed = foundation::ToQ(pt.joint_state);
+        seed = pt.joint_state;
     }
 
-    std::vector<nl::utils::Q> solutions;
-    if (!nl::kinematics::ComputeIkAllSolutions(
-        robot, foundation::ToGpTrsf(pt.tcp_pose), seed, solutions)) {
+    auto solutions_result = kin_.ComputeIkAll(robot, pt.tcp_pose, seed);
+    if (!solutions_result)
         return false;
-    }
 
+    const auto& solutions = solutions_result.value();
     if (solution_index < 0 ||
         solution_index >= static_cast<int>(solutions.size())) {
         return false;
     }
 
-    pt.joint_state = foundation::ToJointState(solutions[solution_index]);
+    pt.joint_state = solutions[solution_index];
     pt.status = domain::TrajectoryPointStatus::kOk;
 
     if (index > 0) {

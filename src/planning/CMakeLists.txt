@@ -7,11 +7,12 @@ set(Headers
     ITrajectoryPlanner.h
     ICollisionChecker.h
     CartesianTrajectoryPlanner.h
+    KdlKinematicsService.h
 )
- 
 
 set(Sources
     CartesianTrajectoryPlanner.cpp
+    KdlKinematicsService.cpp
 )
  
 add_library(${TargetName} SHARED ${Headers} ${Sources})

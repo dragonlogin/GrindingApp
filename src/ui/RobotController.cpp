@@ -13,16 +13,36 @@
 
 #include "MeshLoader.h"
 #include "RobotDisplay.h"
-#include "RobotKinematics.h"
+#include "KdlSolver.h"
+#include "KdlKinematicsService.h"
+#include "domain/Robot.h"
+#include "foundation/Conversions.h"
 
 using namespace nl::occ;
-using namespace nl::kinematics;
 using namespace nl::core;
 
 namespace nl {
 namespace ui {
 
 namespace {
+
+// 临时转换：Phase 6/7 统一迁移后删除
+domain::Robot ToDomainRobot(const nl::core::RbRobot& rb)
+{
+    domain::Robot r;
+    r.name = rb.name;
+    r.source_path = rb.source_path;
+    for (const auto& j : rb.joints) {
+        domain::RobotJoint dj;
+        dj.name = j.name;
+        dj.alpha_deg = j.alpha_deg;
+        dj.a_mm = j.a;
+        dj.d_mm = j.d;
+        dj.offset_deg = j.offset_deg;
+        r.joints.push_back(dj);
+    }
+    return r;
+}
 
 constexpr double kTcpFrameSizeM = 0.04;
 constexpr double kBaseFrameSizeM = 0.08;
@@ -259,7 +279,8 @@ void RobotController::UpdateRobotDisplay()
 {
     if (robot_meshes_.empty()) return;
 
-    std::vector<gp_Trsf> fk = ComputeFk(current_robot_, joint_angles_);
+    nl::kinematics::KdlSolver kin_solver;
+    std::vector<gp_Trsf> fk = kin_solver.ComputeFk(ToDomainRobot(current_robot_), joint_angles_);
 
     auto joint_idx = [&](const std::string& name) -> int {
         for (int i = 0; i < static_cast<int>(current_robot_.joints.size()); ++i)
@@ -347,8 +368,15 @@ bool RobotController::SetTcpPose(const gp_Trsf& target_pose, int tcp_ref_mode, s
         target.Multiply(tcp_inv);
     }
 
-    if (!ComputeIkAllSolutions(current_robot_, target, joint_angles_, out_solutions)) {
-        return false;
+    {
+        planning::KdlKinematicsService kin_svc;
+        auto ik_result = kin_svc.ComputeIkAll(
+            ToDomainRobot(current_robot_),
+            foundation::ToPose(target),
+            foundation::ToJointState(joint_angles_));
+        if (!ik_result) return false;
+        for (const auto& js : ik_result.value())
+            out_solutions.push_back(foundation::ToQ(js));
     }
 
     if (!out_solutions.empty()) {
@@ -360,7 +388,8 @@ bool RobotController::SetTcpPose(const gp_Trsf& target_pose, int tcp_ref_mode, s
 std::vector<gp_Trsf> RobotController::GetCurrentFk() const
 {
     if (robot_meshes_.empty()) return {};
-    return ComputeFk(current_robot_, joint_angles_);
+    nl::kinematics::KdlSolver fk_solver;
+    return fk_solver.ComputeFk(ToDomainRobot(current_robot_), joint_angles_);
 }
 
 } // namespace ui

@@ -4,14 +4,12 @@ set(HEADERS
     EigenSolver.h
     KdlChainBuilder.h
     KdlSolver.h
-    RobotKinematics.h
 )
 
 set(SOURCES
     EigenSolver.cpp
     KdlChainBuilder.cpp
     KdlSolver.cpp
-    RobotKinematics.cpp
 )
 
 add_library(GrindingKinematics SHARED ${HEADERS} ${SOURCES})
@@ -26,6 +24,7 @@ target_include_directories(GrindingKinematics PUBLIC
 
 target_link_libraries(GrindingKinematics PUBLIC
     SSFoundation
+    SSDomain
     GrindingCore
     Eigen3::Eigen
     orocos-kdl

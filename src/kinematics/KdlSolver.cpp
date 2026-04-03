@@ -74,7 +74,7 @@ std::vector<unsigned int> MovableSegmentIndices(const KDL::Chain& chain)
 } // namespace
 
 std::vector<gp_Trsf> KdlSolver::ComputeFk(
-    const nl::core::RbRobot& robot,
+    const domain::Robot& robot,
     const nl::utils::Q& joint_angles)
 {
     KDL::Chain chain = BuildKdlChain(robot, false);
@@ -97,7 +97,7 @@ std::vector<gp_Trsf> KdlSolver::ComputeFk(
 }
 
 bool KdlSolver::ComputeIk(
-    const nl::core::RbRobot& robot,
+    const domain::Robot& robot,
     const gp_Trsf& target,
     const nl::utils::Q& init,
     nl::utils::Q& out)
