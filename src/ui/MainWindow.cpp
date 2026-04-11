@@ -48,6 +48,8 @@
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <Quantity_Color.hxx>
 #include "Conversions.h"
+#include "UrdfRobotImporter.h"
+#include "UrdfToolImporter.h"
 
 using nl::occ::LargestFace;
 using nl::occ::StepImporter;
@@ -56,24 +58,6 @@ using nl::occ::RpyPosTrsf;
 
 namespace nl {
 namespace ui {
-
-// 临时转换：Phase 6/7 统一迁移后删除
-static domain::Robot ToDomainRobot(const nl::core::RbRobot& rb)
-{
-    domain::Robot r;
-    r.name = rb.name;
-    r.source_path = rb.source_path;
-    for (const auto& j : rb.joints) {
-        domain::RobotJoint dj;
-        dj.name = j.name;
-        dj.alpha_deg = j.alpha_deg;
-        dj.a_mm = j.a;
-        dj.d_mm = j.d;
-        dj.offset_deg = j.offset_deg;
-        r.joints.push_back(dj);
-    }
-    return r;
-}
 
 static QTreeWidgetItem* FindNode(QTreeWidgetItem* parent, const std::string& role)
 {
@@ -111,9 +95,13 @@ MainWindow::MainWindow(QWidget* parent)
     SetupToolBar();
     SetupStatusBar();
     SetupCentralWidget();
-    
+
     // Initialize controller after central widget is ready
-    controller_ = new RobotController(viewer_->Context(), this);
+    controller_ = new RobotController(
+    viewer_->Context(),
+    std::make_unique<model_import::UrdfRobotImporter>(),
+    std::make_unique<model_import::UrdfToolImporter>(),
+    this);
     connect(controller_, &RobotController::RobotLoaded, this, &MainWindow::AddRobot);
     connect(controller_, &RobotController::ToolLoaded, this, [this](const QString& name) {
         AddTool(name, "robot");
@@ -160,7 +148,7 @@ void MainWindow::SetupMenuBar()
     QAction* undoAction = undo_stack_->createUndoAction(this, tr("Undo(&U)"));
     undoAction->setShortcut(QKeySequence::Undo);
     editMenu->addAction(undoAction);
-    
+
     QAction* redoAction = undo_stack_->createRedoAction(this, tr("Redo(&R)"));
     redoAction->setShortcut(QKeySequence::Redo);
     editMenu->addAction(redoAction);
@@ -286,7 +274,7 @@ void MainWindow::OnPoseEdited(double x, double y, double z,
     std::vector<nl::utils::Q> solutions;
     {
         auto ik_result = kin_service_.ComputeIkAll(
-            ToDomainRobot(controller_->GetRobot()),
+            controller_->GetRobot(),
             foundation::ToPose(target_base),
             foundation::ToJointState(controller_->GetJointAngles()));
         if (!ik_result) {
@@ -755,7 +743,7 @@ void MainWindow::OnPlanTrajectory(double approach_dist)
     req.approach_dist = approach_dist;
 
     auto result = planner_.Plan(
-        ToDomainRobot(controller_->GetRobot()),
+        controller_->GetRobot(),
         foundation::ToJointState(controller_->GetJointAngles()),
         ws,
         req);
@@ -785,7 +773,7 @@ void MainWindow::OnTrajectoryPointSelected(int index)
     std::vector<nl::utils::Q> solutions;
     {
         auto ik_result = kin_service_.ComputeIkAll(
-            ToDomainRobot(controller_->GetRobot()),
+            controller_->GetRobot(),
             pt.tcp_pose,
             pt.joint_state);
         if (ik_result) {
@@ -799,7 +787,7 @@ void MainWindow::OnTrajectoryPointSelected(int index)
 void MainWindow::OnIkSolutionChanged(int point_index, int solution_index)
 {
     if (planner_.ResolveSinglePoint(trajectory_, point_index,
-        ToDomainRobot(controller_->GetRobot()), solution_index)) {
+        controller_->GetRobot(), solution_index)) {
         traj_panel_->UpdatePoint(point_index, trajectory_.points[point_index]);
         //scene_->UpdateTrajectoryPoint(point_index, trajectory_.points[point_index]);
     }

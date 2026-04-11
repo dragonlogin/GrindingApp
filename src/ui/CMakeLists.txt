@@ -39,6 +39,7 @@ target_include_directories(GrindingUI PUBLIC
 target_link_libraries(GrindingUI PUBLIC
     SSFoundation
     SSDomain
+    SSModelImport
     SSPlanning
     GrindingCore
     GrindingOcc

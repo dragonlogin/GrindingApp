@@ -1,12 +1,5 @@
 #include "RobotController.h"
 
-#include <QDebug>
-#include <QFileInfo>
-#include <QDir>
-#include <QFile>
-#include <QDomDocument>
-#include <QSet>
-
 #include <Geom_Axis2Placement.hxx>
 #include <BRepBuilderAPI_GTransform.hxx>
 #include <gp_GTrsf.hxx>
@@ -19,161 +12,17 @@
 #include "foundation/Conversions.h"
 
 using namespace nl::occ;
-using namespace nl::core;
 
 namespace nl {
 namespace ui {
 
 namespace {
 
-// 临时转换：Phase 6/7 统一迁移后删除
-domain::Robot ToDomainRobot(const nl::core::RbRobot& rb)
-{
-    domain::Robot r;
-    r.name = rb.name;
-    r.source_path = rb.source_path;
-    for (const auto& j : rb.joints) {
-        domain::RobotJoint dj;
-        dj.name = j.name;
-        dj.alpha_deg = j.alpha_deg;
-        dj.a_mm = j.a;
-        dj.d_mm = j.d;
-        dj.offset_deg = j.offset_deg;
-        r.joints.push_back(dj);
-    }
-    return r;
-}
-
 constexpr double kTcpFrameSizeM = 0.04;
 constexpr double kBaseFrameSizeM = 0.08;
 constexpr double kJointFrameSizeM = 0.05;
 
 } // namespace
-
-static nl::utils::Vector3d ParseXyz(const std::string& s)
-{
-    auto p = QString::fromStdString(s).split(' ', Qt::SkipEmptyParts);
-    if (p.size() == 3)
-        return {p[0].toDouble(), p[1].toDouble(), p[2].toDouble()};
-    return {};
-}
-
-static nl::utils::Vector3d ParseUrdfRpyDegrees(const QString& s)
-{
-    const auto parts = s.split(' ', Qt::SkipEmptyParts);
-    if (parts.size() != 3)
-        return {};
-
-    const double roll_deg = parts[0].toDouble();
-    const double pitch_deg = parts[1].toDouble();
-    const double yaw_deg = parts[2].toDouble();
-    // RobotDisplay::RpyPosTrsf expects yaw, pitch, roll in degrees.
-    return {yaw_deg, pitch_deg, roll_deg};
-}
-
-static nl::utils::Vector3d ParseScaleTriple(const QString& s)
-{
-    const auto parts = s.split(' ', Qt::SkipEmptyParts);
-    if (parts.size() != 3)
-        return {1.0, 1.0, 1.0};
-    return {parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble()};
-}
-
-static QString ResolveRelativePath(const QString& base_dir, const QString& relative_path)
-{
-    return QDir(base_dir).filePath(relative_path);
-}
-
-static QString FindUrdfRootLink(const QDomElement& robot_el)
-{
-    QSet<QString> child_links;
-    const QDomNodeList joint_nodes = robot_el.elementsByTagName("joint");
-    for (int i = 0; i < joint_nodes.count(); ++i) {
-        const QString child_link =
-            joint_nodes.at(i).toElement().firstChildElement("child").attribute("link");
-        if (!child_link.isEmpty())
-            child_links.insert(child_link);
-    }
-
-    const QDomNodeList link_nodes = robot_el.elementsByTagName("link");
-    for (int i = 0; i < link_nodes.count(); ++i) {
-        const QDomElement link_el = link_nodes.at(i).toElement();
-        const QString link_name = link_el.attribute("name");
-        if (!child_links.contains(link_name))
-            return link_name;
-    }
-    return {};
-}
-
-static QDomElement FindUrdfLinkByName(const QDomElement& robot_el, const QString& link_name)
-{
-    const QDomNodeList link_nodes = robot_el.elementsByTagName("link");
-    for (int i = 0; i < link_nodes.count(); ++i) {
-        const QDomElement link_el = link_nodes.at(i).toElement();
-        if (link_el.attribute("name") == link_name)
-            return link_el;
-    }
-    return {};
-}
-
-static bool ParseToolUrdf(const QString& urdf_path,
-                          QString& mesh_path,
-                          nl::utils::Vector3d& mesh_scale,
-                          nl::utils::Vector3d& tool_base_rpy_deg,
-                          nl::utils::Vector3d& tool_base_pos,
-                          nl::utils::Vector3d& tcp_rpy_deg,
-                          nl::utils::Vector3d& tcp_pos)
-{
-    QFile file(urdf_path);
-    if (!file.open(QIODevice::ReadOnly)) return false;
-
-    QDomDocument doc;
-    QString err_msg;
-    int err_line = 0;
-    int err_col = 0;
-    if (!doc.setContent(file.readAll(), &err_msg, &err_line, &err_col))
-        return false;
-
-    const QDomElement robot_el = doc.documentElement();
-    const QString base_dir = QFileInfo(urdf_path).absoluteDir().absolutePath();
-    const QString root_link_name = FindUrdfRootLink(robot_el);
-    if (root_link_name.isEmpty()) return false;
-
-    const QDomElement root_link_el = FindUrdfLinkByName(robot_el, root_link_name);
-    if (root_link_el.isNull()) return false;
-
-    const QDomElement visual_el = root_link_el.firstChildElement("visual");
-    const QDomElement origin_el = visual_el.firstChildElement("origin");
-    const QDomElement mesh_el =
-        visual_el.firstChildElement("geometry").firstChildElement("mesh");
-    if (mesh_el.isNull()) return false;
-
-    mesh_path = ResolveRelativePath(base_dir, mesh_el.attribute("filename"));
-    mesh_scale = ParseScaleTriple(mesh_el.attribute("scale"));
-    tool_base_pos = ParseXyz(origin_el.attribute("xyz").toStdString());
-    // Tool URDF files follow the same authoring convention as robot URDF:
-    // RPY values are written in degrees and converted only when building the
-    // OCC transforms used at runtime.
-    tool_base_rpy_deg = ParseUrdfRpyDegrees(origin_el.attribute("rpy"));
-
-    const QDomNodeList joint_nodes = robot_el.elementsByTagName("joint");
-    for (int i = 0; i < joint_nodes.count(); ++i) {
-        const QDomElement joint_el = joint_nodes.at(i).toElement();
-        const QString child_link = joint_el.firstChildElement("child").attribute("link");
-        if (child_link != QStringLiteral("tool0") && child_link != QStringLiteral("tcp0"))
-            continue;
-
-        const QDomElement tcp_origin_el = joint_el.firstChildElement("origin");
-        tcp_pos = ParseXyz(tcp_origin_el.attribute("xyz").toStdString());
-        tcp_rpy_deg = ParseUrdfRpyDegrees(tcp_origin_el.attribute("rpy"));
-        return true;
-    }
-
-    tcp_pos = {};
-    tcp_rpy_deg = {};
-    return true;
-}
-
 static Handle(AIS_Trihedron) MakeTrihedron(const gp_Trsf& trsf, double size)
 {
     gp_Pnt origin(trsf.TranslationPart());
@@ -187,63 +36,65 @@ static Handle(AIS_Trihedron) MakeTrihedron(const gp_Trsf& trsf, double size)
     return tri;
 }
 
-RobotController::RobotController(Handle(AIS_InteractiveContext) context, QObject* parent)
-    : QObject(parent), context_(context)
+RobotController::RobotController(
+    Handle(AIS_InteractiveContext) context,
+    std::unique_ptr<model_import::IRobotImporter> robot_importer,
+    std::unique_ptr<model_import::IToolImporter> tool_importer,
+    QObject* parent)
+    : QObject(parent)
+    , context_(context)
+    , robot_importer_(std::move(robot_importer))
+    , tool_importer_(std::move(tool_importer))
 {
 }
 
 bool RobotController::LoadRobot(const std::string& xml_path)
 {
-    RbRobot robot = RbXmlParser::Parse(xml_path);
-    if (robot.name.empty() || robot.joints.empty()) return false;
+    auto result = robot_importer_->Import(xml_path);
+    if (!result) return false;
+    const auto& def = result.value();
+    if (def.model.joints.empty()) return false;
 
     for (auto& m : robot_meshes_)
         context_->Remove(m.ais, Standard_False);
     robot_meshes_.clear();
 
-    current_robot_ = robot;
+    current_robot_ = def.model;
     joint_angles_ = nl::utils::Q(static_cast<int>(current_robot_.joints.size()), 0.0);
 
-    for (const RbDrawable& drw : robot.drawables) {
-        TopoDS_Shape shape = MeshLoader::Load(drw.mesh_file);
+    for (const model_import::MeshRef& mesh : def.meshes) {
+        TopoDS_Shape shape = MeshLoader::Load(mesh.mesh_file);
         if (shape.IsNull()) continue;
 
         Handle(AIS_Shape) ais = new AIS_Shape(shape);
         context_->Display(ais, AIS_Shaded, 0, Standard_False);
-        robot_meshes_.push_back({drw, shape, ais});
+        robot_meshes_.push_back({mesh, shape, ais});
     }
 
     emit RobotLoaded(QString::fromStdString(current_robot_.name));
-    
     UpdateRobotDisplay();
     return true;
 }
 
 bool RobotController::LoadTool(const std::string& path_str)
 {
-    QString mesh_path;
-    nl::utils::Vector3d mesh_scale;
-    nl::utils::Vector3d base_pos;
-    nl::utils::Vector3d base_rpy;
-    nl::utils::Vector3d tcp_pos;
-    nl::utils::Vector3d tcp_rpy;
-    const QString urdf_path = QString::fromStdString(path_str);
-    if (!ParseToolUrdf(urdf_path, mesh_path, mesh_scale, base_rpy, base_pos, tcp_rpy, tcp_pos))
-        return false;
+    auto result = tool_importer_->Import(path_str);
+    if (!result) return false;
+    const auto& def = result.value();
 
-    tool_base_trsf_ = RpyPosTrsf(base_rpy, base_pos);
-    tool_tcp_trsf_ = RpyPosTrsf(tcp_rpy, tcp_pos);
+    tool_base_trsf_ = RpyPosTrsf(def.base_rpy_deg, def.base_pos_mm);
+    tool_tcp_trsf_  = RpyPosTrsf(def.tcp_rpy_deg,  def.tcp_pos_mm);
 
-    TopoDS_Shape shape = MeshLoader::Load(mesh_path.toStdString());
+    TopoDS_Shape shape = MeshLoader::Load(def.mesh_file);
     if (shape.IsNull()) return false;
 
-    if (std::abs(mesh_scale[0] - 1.0) > 1e-12 ||
-        std::abs(mesh_scale[1] - 1.0) > 1e-12 ||
-        std::abs(mesh_scale[2] - 1.0) > 1e-12) {
+    if (std::abs(def.mesh_scale[0] - 1.0) > 1e-12 ||
+        std::abs(def.mesh_scale[1] - 1.0) > 1e-12 ||
+        std::abs(def.mesh_scale[2] - 1.0) > 1e-12) {
         gp_GTrsf scale_trsf;
-        scale_trsf.SetValue(1, 1, mesh_scale[0]);
-        scale_trsf.SetValue(2, 2, mesh_scale[1]);
-        scale_trsf.SetValue(3, 3, mesh_scale[2]);
+        scale_trsf.SetValue(1, 1, def.mesh_scale[0]);
+        scale_trsf.SetValue(2, 2, def.mesh_scale[1]);
+        scale_trsf.SetValue(3, 3, def.mesh_scale[2]);
         shape = BRepBuilderAPI_GTransform(shape, scale_trsf, Standard_True).Shape();
     }
 
@@ -255,8 +106,7 @@ bool RobotController::LoadTool(const std::string& path_str)
     tool_ais_ = new AIS_Shape(shape);
     context_->Display(tool_ais_, AIS_Shaded, 0, Standard_False);
 
-    emit ToolLoaded(QFileInfo(urdf_path).baseName());
-
+    emit ToolLoaded(QString::fromStdString(def.name));
     UpdateRobotDisplay();
     return true;
 }
@@ -280,7 +130,7 @@ void RobotController::UpdateRobotDisplay()
     if (robot_meshes_.empty()) return;
 
     nl::kinematics::KdlSolver kin_solver;
-    std::vector<gp_Trsf> fk = kin_solver.ComputeFk(ToDomainRobot(current_robot_), joint_angles_);
+    std::vector<gp_Trsf> fk = kin_solver.ComputeFk(current_robot_, joint_angles_);
 
     auto joint_idx = [&](const std::string& name) -> int {
         for (int i = 0; i < static_cast<int>(current_robot_.joints.size()); ++i)
@@ -371,7 +221,7 @@ bool RobotController::SetTcpPose(const gp_Trsf& target_pose, int tcp_ref_mode, s
     {
         planning::KdlKinematicsService kin_svc;
         auto ik_result = kin_svc.ComputeIkAll(
-            ToDomainRobot(current_robot_),
+            current_robot_,
             foundation::ToPose(target),
             foundation::ToJointState(joint_angles_));
         if (!ik_result) return false;
@@ -389,7 +239,7 @@ std::vector<gp_Trsf> RobotController::GetCurrentFk() const
 {
     if (robot_meshes_.empty()) return {};
     nl::kinematics::KdlSolver fk_solver;
-    return fk_solver.ComputeFk(ToDomainRobot(current_robot_), joint_angles_);
+    return fk_solver.ComputeFk(current_robot_, joint_angles_);
 }
 
 } // namespace ui

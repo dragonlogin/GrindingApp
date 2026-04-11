@@ -6,8 +6,6 @@
 #include "KdlSolver.h"
 #include "domain/Robot.h"
 
-using nl::core::RbRobot;
-using nl::core::RbJoint;
 using nl::utils::Vector3d;
 
 namespace nl {
@@ -16,23 +14,6 @@ namespace occ {
 namespace {
 constexpr double kDeg = M_PI / 180.0;
 
-// 临时转换：Phase 6/7 统一迁移 RbRobot → domain::Robot 后删除
-domain::Robot ToDomainRobot(const RbRobot& rb)
-{
-    domain::Robot r;
-    r.name = rb.name;
-    r.source_path = rb.source_path;
-    for (const auto& j : rb.joints) {
-        domain::RobotJoint dj;
-        dj.name = j.name;
-        dj.alpha_deg = j.alpha_deg;
-        dj.a_mm = j.a;
-        dj.d_mm = j.d;
-        dj.offset_deg = j.offset_deg;
-        r.joints.push_back(dj);
-    }
-    return r;
-}
 } // namespace
 
 gp_Trsf DhTrsf(double theta_deg, double d, double a, double alpha_deg)
@@ -68,11 +49,11 @@ gp_Trsf RpyPosTrsf(const Vector3d& rpy, const Vector3d& pos)
     return trsf;
 }
 
-std::vector<gp_Trsf> ComputeFkHome(const RbRobot& robot)
-{
-    nl::kinematics::KdlSolver solver;
-    return solver.ComputeFk(ToDomainRobot(robot), nl::utils::Q(6, 0.0));
-}
+  std::vector<gp_Trsf> ComputeFkHome(const domain::Robot& robot)
+  {
+      nl::kinematics::KdlSolver solver;
+      return solver.ComputeFk(robot, nl::utils::Q(6, 0.0));
+  }
 
 void TrsfToRpyPos(const gp_Trsf& trsf, Vector3d& rpy, Vector3d& pos)
 {

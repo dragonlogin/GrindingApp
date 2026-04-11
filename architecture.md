@@ -7,58 +7,64 @@
 ## 项目目标
 
 Qt5 + OpenCASCADE (OCCT) 机器人磨削仿真应用。
-- 加载工业机器人（RobWork `.rb.xml` 格式）、工具、工件
-- 实时关节 Jog + 正运动学可视化（Eigen3 DH 矩阵）
-- 场景树管理（Station Manager）
+- 加载工业机器人（URDF 格式）、工具、工件
+- 实时关节 Jog + 正运动学可视化（KDL DH 矩阵）
+- 轨迹规划（MoveJ/MoveL）+ 场景树管理
 
 ---
 
 ## CMake 模块架构
 
 ```
-GrindingUtils (SHARED DLL)      src/utils/
+GrindingUtils (SHARED)          src/utils/
     │  纯 C++ 数据类型：Vector3d、Q
     │
-GrindingCore  (SHARED DLL)      src/core/
-    │  Qt5::Core/Xml，共享数据类型；depends on GrindingUtils
+SSFoundation (SHARED)           src/foundation/
+    │  Result<T>、Pose、JointState、Conversions；depends on GrindingUtils + OCCT
     │
-    ├── GrindingOcc  (SHARED DLL)   src/occ/
-    │     OpenCASCADE OCCT libs
+SSDomain (SHARED)               src/domain/
+    │  domain::Robot（纯运动学，无渲染）；depends on SSFoundation
     │
-    └── GrindingKinematics (SHARED DLL)  src/kinematics/
-          Eigen3
-
-GrindingUI  (SHARED DLL)        src/ui/
-    Qt5::Widgets/OpenGL
-    └── 依赖 GrindingCore + GrindingOcc + GrindingKinematics
-
-GrindingApp  (EXE)   execute/main.cpp  → links all four DLLs
-TestRobotKinematics  (EXE)  tests/     → links GrindingOcc + GrindingKinematics + Qt5::Test
+SSModelImport (SHARED)          src/model_import/
+    │  IRobotImporter / IToolImporter 接口 + URDF 实现；depends on SSDomain + GrindingCore
+    │
+GrindingCore (SHARED)           src/core/
+    │  Qt5::Xml，RbXmlParser（过渡用，待后续 Phase 删除）；depends on GrindingUtils
+    │
+GrindingOcc (SHARED)            src/occ/
+    │  OpenCASCADE 几何操作；depends on GrindingCore + SSFoundation
+    │
+GrindingKinematics (SHARED)     src/kinematics/
+    │  KDL 运动学求解器；depends on SSFoundation + SSDomain
+    │
+SSPlanning (SHARED)             src/planning/
+    │  IKinematicsService / KdlKinematicsService / ITrajectoryPlanner；depends on SSDomain + GrindingKinematics
+    │
+GrindingUI (SHARED)             src/ui/
+    │  Qt5 UI 层；depends on SSModelImport + SSPlanning + GrindingOcc + GrindingKinematics
+    │
+GrindingApp (EXE)               execute/main.cpp
 ```
-
-PUBLIC include 目录随依赖链自动传播，无需消费方手动添加：
-
-| 模块 | namespace | 暴露的 include 路径 |
-|---|---|---|
-| `GrindingUtils` | `nl::utils` | `src/utils/` |
-| `GrindingCore` | `nl::core` | `src/core/`（继承 `src/utils/`） |
-| `GrindingOcc` | `nl::occ` | `src/occ/`（继承 `src/core/`） |
-| `GrindingKinematics` | `nl::kinematics` | `src/kinematics/`（继承 `src/core/`） |
-| `GrindingUI` | `nl::ui` | `src/ui/`（继承所有上游） |
 
 ---
 
 ## 构建产物
 
-| CMake 目标 | 类型 | 输出路径 |
+| CMake 目标 | 类型 | 产出 |
 |---|---|---|
-| `GrindingUtils` | SHARED DLL | `build/bin/Release/GrindingUtils.dll` |
-| `GrindingCore` | SHARED DLL | `build/bin/Release/GrindingCore.dll` |
-| `GrindingOcc` | SHARED DLL | `build/bin/Release/GrindingOcc.dll` |
-| `GrindingKinematics` | SHARED DLL | `build/bin/Release/GrindingKinematics.dll` |
-| `GrindingUI` | SHARED DLL | `build/bin/Release/GrindingUI.dll` |
-| `GrindingApp` | Executable | `build/bin/Release/GrindingApp.exe` |
-| `TestRobotKinematics` | Test Executable | `build/tests/Release/TestRobotKinematics.exe` |
+| `GrindingUtils` | SHARED | `libGrindingUtils.dylib` |
+| `SSFoundation` | SHARED | `libSSFoundation.dylib` |
+| `SSDomain` | SHARED | `libSSDomain.dylib` |
+| `SSModelImport` | SHARED | `libSSModelImport.dylib` |
+| `GrindingCore` | SHARED | `libGrindingCore.dylib` |
+| `GrindingOcc` | SHARED | `libGrindingOcc.dylib` |
+| `GrindingKinematics` | SHARED | `libGrindingKinematics.dylib` |
+| `SSPlanning` | SHARED | `libSSPlanning.dylib` |
+| `GrindingUI` | SHARED | `libGrindingUI.dylib` |
+| `GrindingApp` | EXE | `bin/GrindingApp` |
+| `TestFoundtion` | Test EXE | `bin/TestFoundtion` |
+| `TestPlanning` | Test EXE | `bin/TestPlanning` |
+| `TestModelImport` | Test EXE | `bin/TestModelImport` |
 
 ---
 
@@ -67,178 +73,183 @@ PUBLIC include 目录随依赖链自动传播，无需消费方手动添加：
 ```
 GrindingApp/
 ├── execute/
-│   └── main.cpp                       # 可执行入口：QApplication + MainWindow
+│   └── main.cpp                          # QApplication + MainWindow 入口
 ├── src/
-│   ├── CMakeLists.txt                 # add_subdirectory 聚合
+│   ├── CMakeLists.txt                    # add_subdirectory 聚合（include src/ 全局路径）
 │   ├── utils/
-│   │   ├── CMakeLists.txt             # GrindingUtils (SHARED DLL)
-│   │   ├── GrindingUtilsExport.h      # GRINDING_UTILS_EXPORT 宏
-│   │   ├── Vector3d.h                 # nl::utils::Vector3d（全 inline，无 .cpp）
-│   │   └── Q.h/cpp                    # nl::utils::Q（关节角配置，封装 double[]）
+│   │   ├── Vector3d.h                    # nl::utils::Vector3d（全 inline）
+│   │   └── Q.h/cpp                       # nl::utils::Q（关节角配置）
+│   ├── foundation/
+│   │   ├── Result.h                      # foundation::Result<T>（错误处理惯用法）
+│   │   ├── Pose.h                        # foundation::Pose（4x4 齐次矩阵，单位 m）
+│   │   ├── JointState.h                  # foundation::JointState（关节角度，单位 deg）
+│   │   ├── Error.h                       # foundation::Error
+│   │   ├── Conversions.h/cpp             # Pose ↔ gp_Trsf, JointState ↔ Q 转换
+│   │   └── UnitTypes.h                   # 单位标注类型
+│   ├── domain/
+│   │   ├── Robot.h                       # domain::Robot + RobotJoint（纯运动学，无渲染）
+│   │   ├── Waypoint.h                    # domain::Waypoint
+│   │   ├── WaypointSet.h                 # domain::WaypointSet
+│   │   └── Trajectory.h                  # domain::Trajectory
+│   ├── model_import/
+│   │   ├── ModelImportExport.h           # MODEL_IMPORT_EXPORT 宏
+│   │   ├── RobotDefinition.h             # model_import::RobotDefinition + MeshRef
+│   │   ├── ToolDefinition.h              # model_import::ToolDefinition
+│   │   ├── IRobotImporter.h              # 纯虚接口：Import() → Result<RobotDefinition>
+│   │   ├── IToolImporter.h               # 纯虚接口：Import() → Result<ToolDefinition>
+│   │   ├── UrdfRobotImporter.h/cpp       # URDF 机器人导入器（实现 IRobotImporter）
+│   │   └── UrdfToolImporter.h/cpp        # URDF 工具导入器（实现 IToolImporter）
 │   ├── core/
-│   │   ├── CMakeLists.txt             # GrindingCore (SHARED DLL)
-│   │   ├── GrindingCoreExport.h       # GRINDING_CORE_EXPORT 宏
-│   │   └── RbXmlParser.h/cpp          # nl::core：RbRobot / RbJoint / RbDrawable
-│   ├── ui/
-│   │   ├── CMakeLists.txt             # GrindingUI (SHARED DLL)
-│   │   ├── GrindingUIExport.h         # GRINDING_UI_EXPORT 宏
-│   │   ├── MainWindow.h/cpp           # nl::ui::MainWindow：菜单、Jog面板、场景树
-│   │   ├── OcctViewWidget.h/cpp       # nl::ui::OcctViewWidget：Qt 封装 OCCT V3d_View
-│   │   ├── TrajectoryPlanner.h/cpp    # nl::ui::TrajectoryPlanner（MoveJ/MoveL + IK 规划）
-│   │   ├── TrajectoryPanel.h/cpp      # nl::ui::TrajectoryPanel（轨迹编辑表格 Dock）
-│   │   ├── TrajectoryPlayer.h/cpp     # nl::ui::TrajectoryPlayer（回放控制 Dock）
-│   │   └── MovementPanel.h/cpp        # nl::ui::MovementPanel（6-DOF 移动面板 Dock）
+│   │   ├── GrindingCoreExport.h          # GRINDING_CORE_EXPORT 宏
+│   │   └── RbXmlParser.h/cpp             # nl::core::RbRobot（过渡结构，待删）
 │   ├── occ/
-│   │   ├── CMakeLists.txt             # GrindingOcc (SHARED DLL)
-│   │   ├── GrindingOccExport.h        # GRINDING_OCC_EXPORT 宏
-│   │   ├── StlLoader.h/cpp            # nl::occ::StlLoader：.stl → TopoDS_Shape
-│   │   ├── StepImporter.h/cpp         # nl::occ::StepImporter：.step → TopoDS_Shape
-│   │   ├── RobotDisplay.h/cpp         # nl::occ：DhTrsf / RpyPosTrsf / ComputeFkHome
-│   │   ├── Waypoint.h                 # nl::occ::Waypoint（路径点数据结构，全 inline）
-│   │   ├── IWaypointAlgo.h            # nl::occ::IWaypointAlgo 接口 + WaypointConfig
-│   │   ├── WaypointGenerator.h/cpp    # nl::occ::WaypointGenerator（Bridge 抽象层）
-│   │   ├── WaypointGridAlgo.h/cpp     # nl::occ::WaypointGridAlgo（UV 网格采样）
-│   │   ├── WaypointPlanarAlgo.h/cpp   # nl::occ::WaypointPlanarAlgo（平面切割采样）
-│   │   ├── Trajectory.h               # nl::occ::Trajectory / TrajectoryPoint（轨迹数据结构）
-│   │   └── SurfaceWaypointGen.h/cpp   # nl::occ：LargestFace / GenerateGridWaypoints（旧版便捷函数）
-│   └── kinematics/
-│       ├── CMakeLists.txt             # GrindingKinematics (SHARED DLL)
-│       ├── GrindingKinematicsExport.h # GRINDING_KINEMATICS_EXPORT 宏
-│       ├── IKinematicsSolver.h        # nl::kinematics::IKinematicsSolver（抽象接口）
-│       ├── EigenSolver.h/cpp          # nl::kinematics::EigenSolver（Eigen3 实现）
-│       └── RobotKinematics.h/cpp      # nl::kinematics：ComputeFk / ComputeIk（自由函数）
+│   │   ├── GrindingOccExport.h           # GRINDING_OCC_EXPORT 宏
+│   │   ├── StlLoader.h/cpp               # nl::occ::StlLoader：.stl → TopoDS_Shape
+│   │   ├── StepImporter.h/cpp            # nl::occ::StepImporter：.step → TopoDS_Shape
+│   │   ├── RobotDisplay.h/cpp            # nl::occ：DhTrsf / RpyPosTrsf / ComputeFkHome
+│   │   ├── IWaypointAlgo.h               # nl::occ::IWaypointAlgo 接口
+│   │   ├── WaypointGenerator.h/cpp       # nl::occ::WaypointGenerator（Bridge）
+│   │   ├── WaypointGridAlgo.h/cpp        # UV 网格采样算法
+│   │   ├── WaypointPlanarAlgo.h/cpp      # 平面切割采样算法
+│   │   └── SurfaceWaypointGen.h/cpp      # 旧版便捷函数（待清理）
+│   ├── kinematics/
+│   │   ├── GrindingKinematicsExport.h    # GRINDING_KINEMATICS_EXPORT 宏
+│   │   ├── IKinematicsSolver.h           # nl::kinematics::IKinematicsSolver（抽象接口）
+│   │   ├── KdlSolver.h/cpp               # nl::kinematics::KdlSolver（KDL FK/IK）
+│   │   ├── KdlChainBuilder.h/cpp         # domain::Robot → KDL 链构建
+│   │   └── EigenSolver.h/cpp             # nl::kinematics::EigenSolver（委托 KdlSolver）
+│   ├── planning/
+│   │   ├── IKinematicsService.h          # planning::IKinematicsService（FK/IK 服务接口）
+│   │   ├── KdlKinematicsService.h/cpp    # KDL 实现，零三方头依赖
+│   │   ├── ITrajectoryPlanner.h          # planning::ITrajectoryPlanner（轨迹规划接口）
+│   │   └── CartesianTrajectoryPlanner.h/cpp # MoveL 笛卡尔插值规划
+│   └── ui/
+│       ├── GrindingUIExport.h            # GRINDING_UI_EXPORT 宏
+│       ├── MainWindow.h/cpp              # nl::ui::MainWindow：菜单、场景树、信号编排
+│       ├── OcctViewWidget.h/cpp          # nl::ui::OcctViewWidget：Qt 封装 OCCT V3d_View
+│       ├── RobotController.h/cpp         # nl::ui::RobotController：加载 + 渲染 + FK/IK
+│       ├── JogPanel.h/cpp                # nl::ui::JogPanel：关节 Jog 滑块
+│       ├── TrajectoryPanel.h/cpp         # nl::ui::TrajectoryPanel：轨迹编辑表格 Dock
+│       ├── TrajectoryPlayer.h/cpp        # nl::ui::TrajectoryPlayer：回放控制 Dock
+│       └── MovementPanel.h/cpp           # nl::ui::MovementPanel：6-DOF 移动面板
 ├── tests/
-│   ├── CMakeLists.txt                 # TestRobotKinematics → links GrindingOcc + GrindingKinematics
-│   └── TestRobotKinematics.cpp        # Qt Test：Eigen FK vs 手工 DH 对比
+│   ├── CMakeLists.txt
+│   ├── test_foundation/
+│   │   └── TestFoundation.cpp            # SSFoundation 单元测试
+│   ├── test_planning/
+│   │   └── TestKdlKinematicsService.cpp  # KdlKinematicsService 单元测试
+│   └── test_model_import/
+│       └── TestUrdfRobotImporter.cpp     # UrdfRobotImporter 单元测试
 ├── model/
-│   ├── robot/IRB140/                  # ABB IRB140 机器人模型
-│   │   ├── IRB140.rb.xml              # RobWork 格式：DH参数 + 网格路径
-│   │   └── Geometry/*.stl             # 7个 STL（BASE + LINK1..6）
-│   └── tool/Burr/                     # 打磨工具
-│       ├── Burr.xml                   # 工具坐标系定义（TCP0 偏移）
-│       ├── Burr.tool                  # 工具元数据（引用 Burr.xml）
-│       └── Tool.stl                   # 工具网格
-├── resources/resources.qrc            # Qt 资源（图标等）
-├── translations/zh_CN.ts              # 中文翻译源文件
-├── CMakeLists.txt                     # 根构建配置（聚合各模块）
-└── vcpkg.json                         # vcpkg 依赖声明
+│   ├── robot/IRB140/IRB140.urdf          # ABB IRB140 URDF + STL 网格
+│   └── robot/irb2400/irb2400.urdf        # IRB2400 URDF
+├── docs/
+│   └── superpowers/specs/                # Phase 设计文档
+├── CMakeLists.txt
+└── vcpkg.json
 ```
 
 ---
 
 ## 模块职责
 
-### `src/utils/` — GrindingUtils（基础数据类型）
+### `src/foundation/` — SSFoundation
 
 | 文件 | 职责 |
 |---|---|
-| `Vector3d.h` | `nl::utils::Vector3d`：3D 向量，接口边界用（全 inline，无 DLL 符号） |
-| `Q.h/cpp` | `nl::utils::Q`：关节角配置（封装 `std::vector<double>`，`operator[]`） |
+| `Result.h` | `Result<T>` 错误处理惯用法，`[[nodiscard]]` |
+| `Pose.h` | `Pose`：4x4 齐次变换矩阵，行主序，单位 m |
+| `JointState.h` | `JointState`：关节角度集合，单位 deg |
+| `Conversions.h/cpp` | `ToPose(gp_Trsf)` / `ToGpTrsf(Pose)` / `ToJointState(Q)` / `ToQ(JointState)` |
 
-### `src/core/` — GrindingCore（共享数据类型）
-
-| 文件 | 职责 |
-|---|---|
-| `GrindingCoreExport.h` | `GRINDING_CORE_EXPORT` 宏 |
-| `RbXmlParser.h/cpp` | 静态 `Parse(xml_path)` → `nl::core::RbRobot`（含 DH 参数和 STL 路径） |
-
-### `src/ui/` — GrindingUI（Qt UI 层）
+### `src/domain/` — SSDomain
 
 | 文件 | 职责 |
 |---|---|
-| `MainWindow.h/cpp` | `nl::ui::MainWindow`：UI 组装、场景树、Jog 面板、机器人/工具/工件加载 |
-| `OcctViewWidget.h/cpp` | `nl::ui::OcctViewWidget`：封装 OCCT 3D 视口，暴露 `Context()` / `View()` |
-| `TrajectoryPlanner.h/cpp` | `nl::ui::TrajectoryPlanner`：MoveJ/MoveL 插值 + IK 求解 + 异常检测 |
-| `TrajectoryPanel.h/cpp` | `nl::ui::TrajectoryPanel`：右侧 Dock 轨迹编辑表格 + IK 选解 |
-| `TrajectoryPlayer.h/cpp` | `nl::ui::TrajectoryPlayer`：底部 Dock 回放控制（播放/暂停/停止/进度/速度） |
-| `MovementPanel.h/cpp` | `nl::ui::MovementPanel`：临时 6-DOF 移动面板（robot base / workpiece 共用） |
+| `Robot.h` | `domain::Robot`（name, source_path, joints[]）；`RobotJoint`（DH 参数）；**纯运动学，不含渲染数据** |
 
-### `src/occ/` — GrindingOcc（OpenCASCADE 操作层）
+### `src/model_import/` — SSModelImport
 
 | 文件 | 职责 |
 |---|---|
-| `StlLoader.h/cpp` | `nl::occ::StlLoader`：静态 `Load(path)` → `TopoDS_Shape` |
-| `StepImporter.h/cpp` | `nl::occ::StepImporter`：静态 `Load(path, face_count*)` → `TopoDS_Shape` |
-| `RobotDisplay.h/cpp` | `nl::occ`：`DhTrsf()`、`RpyPosTrsf(Vector3d)`、`ComputeFkHome()` |
-| `Waypoint.h` | `nl::occ::Waypoint`：路径点（`gp_Trsf pose` + `speed_ratio`） |
-| `IWaypointAlgo.h` | `nl::occ::IWaypointAlgo`：路径生成算法接口 + `WaypointConfig` |
-| `WaypointGenerator.h/cpp` | `nl::occ::WaypointGenerator`：Bridge 模式抽象层（SetFace + SetAlgorithm + Generate） |
-| `WaypointGridAlgo.h/cpp` | `nl::occ::WaypointGridAlgo`：UV 参数网格采样（蛇形遍历） |
-| `WaypointPlanarAlgo.h/cpp` | `nl::occ::WaypointPlanarAlgo`：平面切割采样（BRepAlgoAPI_Section） |
-| `Trajectory.h` | `nl::occ::Trajectory` / `TrajectoryPoint`：轨迹数据结构（MoveType + Status + joint_angles） |
-| `SurfaceWaypointGen.h/cpp` | `nl::occ`：`LargestFace()` / `GenerateGridWaypoints()`（旧版便捷函数） |
+| `RobotDefinition.h` | `RobotDefinition = {domain::Robot model, vector<MeshRef> meshes}` |
+| `ToolDefinition.h` | `ToolDefinition`：mesh 路径 + base/tcp 变换参数 |
+| `IRobotImporter.h` | `IRobotImporter::Import(path)` → `Result<RobotDefinition>` |
+| `IToolImporter.h` | `IToolImporter::Import(path)` → `Result<ToolDefinition>` |
+| `UrdfRobotImporter.h/cpp` | 实现 `IRobotImporter`；内部调 `RbXmlParser::Parse()` 后转换 |
+| `UrdfToolImporter.h/cpp` | 实现 `IToolImporter`；Qt XML 直接解析工具 URDF |
 
-### `src/kinematics/` — GrindingKinematics（运动学层）
+### `src/core/` — GrindingCore（过渡层，待后续 Phase 删除）
 
 | 文件 | 职责 |
 |---|---|
-| `IKinematicsSolver.h` | `nl::kinematics::IKinematicsSolver`：FK/IK 抽象接口（纯虚） |
-| `EigenSolver.h/cpp` | `nl::kinematics::EigenSolver`：Eigen3 实现 FK + IK（Jacobian 伪逆 SVD） |
-| `RobotKinematics.h/cpp` | `nl::kinematics`：`ComputeFk(robot, Q)` / `ComputeIk(robot, T, Q, Q&)`（自由函数，委托 EigenSolver） |
+| `RbXmlParser.h/cpp` | `RbXmlParser::Parse(path)` → `RbRobot`；目前仍被 `UrdfRobotImporter` 调用 |
+
+### `src/kinematics/` — GrindingKinematics
+
+| 文件 | 职责 |
+|---|---|
+| `IKinematicsSolver.h` | `IKinematicsSolver`：`ComputeFk` / `ComputeIk` 抽象接口 |
+| `KdlSolver.h/cpp` | KDL 正逆运动学，参数 `domain::Robot` + `Q` |
+| `KdlChainBuilder.h/cpp` | `domain::Robot` → `KDL::Chain` 构建 |
+| `EigenSolver.h/cpp` | Eigen3 实现（委托给 `KdlSolver`） |
+
+### `src/planning/` — SSPlanning
+
+| 文件 | 职责 |
+|---|---|
+| `IKinematicsService.h` | `ComputeFk` / `ComputeIk` / `ComputeIkAll` 服务门面接口 |
+| `KdlKinematicsService.h/cpp` | KDL 实现；头文件零三方依赖（Pimpl 精神） |
+| `ITrajectoryPlanner.h` | 轨迹规划接口，持有 `IKinematicsService&` |
+| `CartesianTrajectoryPlanner.h/cpp` | MoveL 笛卡尔插值 |
+
+### `src/ui/` — GrindingUI
+
+| 文件 | 职责 |
+|---|---|
+| `RobotController.h/cpp` | 注入 `IRobotImporter` + `IToolImporter`；持有 `domain::Robot`；管理 AIS 渲染和 FK 更新 |
+| `MainWindow.h/cpp` | UI 编排：信号连接、场景树、构造并注入 `UrdfRobotImporter`/`UrdfToolImporter` |
 
 ---
 
 ## 核心数据结构
 
 ```cpp
-// src/utils/Vector3d.h  (nl::utils)
-struct Vector3d {
-    double x = 0.0, y = 0.0, z = 0.0;
-    double  operator[](int i) const;
-    double& operator[](int i);
+// domain::Robot（src/domain/Robot.h）
+struct RobotJoint { string name; double alpha_deg, a_mm, d_mm, offset_deg; };
+struct Robot      { string name, source_path; vector<RobotJoint> joints; };
+
+// model_import::RobotDefinition（src/model_import/RobotDefinition.h）
+struct MeshRef        { string name, ref_joint, mesh_file; Vector3d rpy, pos; };
+struct RobotDefinition { domain::Robot model; vector<MeshRef> meshes; };
+
+// model_import::ToolDefinition（src/model_import/ToolDefinition.h）
+struct ToolDefinition {
+    string name, source_path, mesh_file;
+    Vector3d mesh_scale, base_rpy_deg, base_pos_mm, tcp_rpy_deg, tcp_pos_mm;
 };
 
-// src/utils/Q.h  (nl::utils)
-class Q {
-    std::vector<double> values_;  // 关节角（度）
-public:
-    explicit Q(int n = 6, double val = 0.0);
-    Q(std::initializer_list<double> vals);
-    int    size() const;
-    double  operator[](int i) const;
-    double& operator[](int i);
-    const double* data() const;
-};
-
-// src/core/RbXmlParser.h  (nl::core)
-struct RbJoint {
-    std::string name;
-    double alpha_deg, a, d, offset_deg;  // Craig DH 参数（a/d 单位 mm）
-};
-
-struct RbDrawable {
-    std::string name;
-    std::string ref_joint;           // "Robot_Base" | "Joint1".."Joint6"
-    utils::Vector3d rpy;             // 欧拉角（RobWork 顺序：Rz*Ry*Rx），单位 deg
-    utils::Vector3d pos;             // 平移，单位 mm
-    std::string mesh_file;           // .stl 绝对路径
-};
-
-struct RbRobot {
-    std::string name;
-    std::vector<RbJoint>    joints;     // 6个关节
-    std::vector<RbDrawable> drawables;  // 7个网格（base + link1-6）
-};
+// foundation::Result<T>（src/foundation/Result.h）
+Result<T>::Ok(value) / Result<T>::Fail(error)
+bool ok(); T& value(); Error& error();
 ```
 
 ---
 
-## 数据流
+## 数据流（Robot 导入）
 
 ```
-IRB140.rb.xml
+IRB140.urdf
     │
+    ▼  UrdfRobotImporter::Import()
+    │      └─ RbXmlParser::Parse() → RbRobot → ToRobotDefinition()
     ▼
-RbXmlParser::Parse()          → RbRobot（DH参数 + STL路径）
+RobotDefinition { model: domain::Robot, meshes: vector<MeshRef> }
     │
-    ├──► StlLoader::Load()    → TopoDS_Shape × 7
-    │       └──► AIS_Shape    → 显示到 OcctViewWidget
+    ├──► model → RobotController::current_robot_ (domain::Robot)
+    │       └──► KdlSolver::ComputeFk() → gp_Trsf × N
     │
-    ├──► ComputeFk()          → gp_Trsf × 6（关节世界坐标）
-    │       └──► AIS_Trihedron → 坐标系渲染（base/tcp 默认显示）
-    │
-    └──► Jog Panel (QSlider)  → joint_angles_[] → UpdateRobotDisplay()
-             └──► ComputeFk() → 实时更新网格位置和坐标系
+    └──► meshes → StlLoader::Load() → AIS_Shape × N → OcctViewWidget
 ```
 
 ---
@@ -247,83 +258,37 @@ RbXmlParser::Parse()          → RbRobot（DH参数 + STL路径）
 
 | 任务 | 主要文件 |
 |---|---|
-| 修改 FK 计算逻辑 | `src/kinematics/RobotKinematics.cpp` (或 `EigenSolver.cpp`) |
-| 修改 IK 逻辑 | `src/kinematics/EigenSolver.cpp` → `ComputeIk()` |
-| 替换运动学后端 | 实现 `IKinematicsSolver` 接口，在 `RobotKinematics.cpp` 中切换 |
+| 加载新格式机器人 | 实现 `IRobotImporter`，在 `MainWindow` 构造时注入 |
+| 修改 URDF 解析逻辑 | `src/model_import/UrdfRobotImporter.cpp` |
+| 修改工具加载逻辑 | `src/model_import/UrdfToolImporter.cpp` |
+| 修改 FK/IK 逻辑 | `src/kinematics/KdlSolver.cpp` |
+| 替换运动学后端 | 实现 `IKinematicsService`，在 `MainWindow` 中替换 `kin_service_` |
 | 修改 Jog 面板 UI | `src/ui/MainWindow.cpp` → `SetupJogPanel()` |
-| 修改关节坐标系渲染 | `src/ui/MainWindow.cpp` → `UpdateCoordinateFrames()` |
-| 修改场景树 | `src/ui/MainWindow.cpp` → `SetupSceneTree()`, `AddRobot()`, `AddTool()` |
-| 加载新格式机器人 | `src/RbXmlParser.h/cpp` |
-| 修改工具加载 | `src/ui/MainWindow.cpp` → `OnLoadTool()` |
+| 修改场景树 | `src/ui/MainWindow.cpp` → `AddRobot()` / `AddTool()` |
 | 修改工件加载 | `src/ui/MainWindow.cpp` → `OnImportWorkpiece()` + `src/occ/StepImporter.h/cpp` |
 | 修改 3D 视口交互 | `src/ui/OcctViewWidget.cpp` |
-| 修改 STL 加载逻辑 | `src/occ/StlLoader.h/cpp` |
-| 添加新测试 | `tests/TestRobotKinematics.cpp` + `tests/CMakeLists.txt` |
 | 修改路径生成算法 | `src/occ/WaypointGridAlgo.cpp` 或 `WaypointPlanarAlgo.cpp` |
-| 新增路径生成算法 | 实现 `IWaypointAlgo` 接口，在 `MainWindow::OnGenerateWaypoints()` 中切换 |
-| 修改面选取交互 | `src/ui/MainWindow.cpp` → `OnFacePicked()` / `OnSelectFaceMode()` |
-| 修改轨迹规划逻辑 | `src/ui/TrajectoryPlanner.cpp` → `Plan()` / `InterpolateMoveL()` |
-| 修改轨迹回放 | `src/ui/TrajectoryPlayer.cpp` + `MainWindow::OnPlaybackFrame()` |
-| 修改轨迹编辑表格 | `src/ui/TrajectoryPanel.cpp` |
-| 修改机器人/工件移动 | `src/ui/MovementPanel.cpp` + `MainWindow::OnMoveRobot/OnMoveWorkpiece()` |
-| 新增 occ 模块功能 | `src/occ/` 下新建文件 + `src/occ/CMakeLists.txt` |
-| 新增运动学功能 | `src/kinematics/` 下新建文件 + `src/kinematics/CMakeLists.txt` |
-
----
-
-## MainWindow 成员速查
-
-```cpp
-// src/ui/MainWindow.h  (nl::ui::MainWindow)
-OcctViewWidget*        viewer_            // 3D 视口
-nl::core::RbRobot      current_robot_     // 已加载机器人数据
-nl::utils::Q           joint_angles_      // 当前关节角（度），Q(6)
-std::vector<RobotMesh> robot_meshes_      // 机器人各节 AIS 对象
-QSlider*               joint_sliders_[6]  // Jog 滑块
-QTreeWidget*           scene_tree_        // 场景树
-std::vector<Handle(AIS_Trihedron)> joint_frames_  // 各关节坐标系（1-5 默认隐藏）
-Handle(AIS_Trihedron)  base_frame_        // 机器人底座坐标系（默认显示）
-Handle(AIS_Shape)      tool_ais_          // 工具 AIS 对象
-Handle(AIS_Trihedron)  tool_tcp_frame_    // 工具 TCP 坐标系（默认显示）
-gp_Trsf                tool_base_trsf_   // 工具安装偏移
-gp_Trsf                tool_tcp_trsf_    // 工具 TCP 偏移
-```
+| 修改轨迹规划逻辑 | `src/planning/CartesianTrajectoryPlanner.cpp` |
+| 修改轨迹回放 | `src/ui/TrajectoryPlayer.cpp` |
+| 添加新测试 | `tests/test_XXX/` 下新建 + 对应 `CMakeLists.txt` |
 
 ---
 
 ## 运动学约定
 
 - **DH 约定**：Craig 1989（`Rz(θ) * Tz(d) * Tx(a) * Rx(α)`）
-- **单位**：长度 mm，角度 degrees（内部转 radians）
+- **单位**：长度 mm（RbRobot/MeshRef），m（Pose/gp_Trsf），角度 deg（Q/JointState）
 - **关节顺序**：Joint1..Joint6，Joint6 = TCP
-- **坐标系**：RobWork 世界系（Z 向上）
+- **RPY 顺序**：`Rz(yaw) * Ry(pitch) * Rx(roll)`，MeshRef.rpy = `{yaw, pitch, roll}`
 
 ---
 
 ## 构建与测试
 
 ```bash
-# CMake 路径（VS 内置）
-CMAKE="D:/Program Files/Microsoft Visual Studio/2022/Professional/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe"
-
-# 配置（首次或 CMakeLists.txt 变更后）
-"$CMAKE" -S . -B build -DVCPKG_MANIFEST_INSTALL=OFF
-
 # 构建
-"$CMAKE" --build build --config Release
+cmake --build build --config Release
 
 # 测试
 cd build && ctest --output-on-failure -C Release
 ```
-
----
-
-## 外部依赖（vcpkg）
-
-| 库 | 模块 | 用途 |
-|---|---|---|
-| Qt5 Core/Xml | GrindingCore | 数据类型、XML 解析 |
-| Qt5 Gui/Widgets/OpenGL | GrindingUI | UI 框架 |
-| Qt5 Test | Tests | 单元测试 |
-| OpenCASCADE (OCCT) | GrindingOcc / GrindingKinematics | 3D 几何内核、STEP/STL、渲染 |
-| Eigen3 | GrindingKinematics | 线性代数（DH 矩阵计算） |
