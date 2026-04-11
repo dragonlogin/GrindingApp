@@ -10,7 +10,7 @@
 class V3d_Viewer;
 class V3d_View;
 class AIS_InteractiveContext;
-class WNT_Window;
+class Aspect_Window;
 class OpenGl_GraphicDriver;
 
 namespace nl {
@@ -48,7 +48,7 @@ private:
     Handle(V3d_Viewer)             viewer_;
     Handle(V3d_View)               view_;
     Handle(AIS_InteractiveContext) context_;
-    Handle(WNT_Window)             occtWindow_;
+    Handle(Aspect_Window)          occtWindow_;
     bool                           initialized_ = false;
 
     QPoint last_pos_;

@@ -212,18 +212,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Generate waypoints first</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Trajectory planned with %1 errors</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Trajectory planned: %1 points, ready to play</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Playback finished</source>
         <translation type="unfinished"></translation>
     </message>
@@ -257,6 +245,10 @@
     </message>
     <message>
         <source>Clear Way points</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No waypoints. Please generate waypoints first.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

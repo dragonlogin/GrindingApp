@@ -34,6 +34,17 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "macos-release",
+      "displayName": "macOS Release (Homebrew)",
+      "description": "Release build for macOS Intel using Homebrew packages",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_PREFIX_PATH": "/usr/local/opt/qt@5;/usr/local/opt/opencascade;/usr/local/opt/orocos-kdl;/usr/local/opt/eigen;/usr/local/opt/assimp;/usr/local/opt/urdfdom"
+      }
     }
   ],
   "buildPresets": [
@@ -46,6 +57,11 @@
       "name": "vs2022-release-build",
       "displayName": "Build Release",
       "configurePreset": "vs2022-release"
+    },
+    {
+      "name": "macos-release-build",
+      "displayName": "Build macOS Release",
+      "configurePreset": "macos-release"
     }
   ]
 }

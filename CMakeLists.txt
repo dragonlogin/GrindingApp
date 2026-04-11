@@ -22,11 +22,24 @@ if(MSVC)
     set(ENV{CL_UTF8} 1)
 endif()
 
+# macOS: suppress OpenGL deprecation warnings (OCCT uses OpenGL, still functional)
+if(APPLE)
+    add_compile_definitions(GL_SILENCE_DEPRECATION)
+endif()
+
 # Dependencies
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL Xml Test)
 find_package(Qt5 OPTIONAL_COMPONENTS LinguistTools)
 find_package(OpenCASCADE REQUIRED)
 find_package(Eigen3 REQUIRED)
+# Compat: orocos-kdl's FindEigen3.cmake checks legacy all-caps EIGEN3_FOUND,
+# but CMake config-mode only sets mixed-case Eigen3_FOUND. Pre-populate so
+# orocos-kdl skips its own (Eigen-5.x-incompatible) version scan.
+if(Eigen3_FOUND AND NOT EIGEN3_FOUND)
+    set(EIGEN3_FOUND TRUE)
+    get_target_property(EIGEN3_INCLUDE_DIR Eigen3::Eigen INTERFACE_INCLUDE_DIRECTORIES)
+    list(GET EIGEN3_INCLUDE_DIR 0 EIGEN3_INCLUDE_DIR)
+endif()
 find_package(orocos_kdl CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_package(urdfdom CONFIG REQUIRED)
@@ -50,7 +63,6 @@ if(Qt5LinguistTools_FOUND)
         src/occ/StlLoader.h
         src/occ/StepImporter.h
         src/occ/RobotDisplay.h
-        src/kinematics/RobotKinematics.h
     )
     set(ALL_SOURCES
         src/core/RbXmlParser.cpp
@@ -59,7 +71,6 @@ if(Qt5LinguistTools_FOUND)
         src/occ/StlLoader.cpp
         src/occ/StepImporter.cpp
         src/occ/RobotDisplay.cpp
-        src/kinematics/RobotKinematics.cpp
     )
     qt5_create_translation(QM_FILES
         ${ALL_HEADERS}

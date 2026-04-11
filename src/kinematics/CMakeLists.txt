@@ -31,7 +31,6 @@ target_link_libraries(GrindingKinematics PUBLIC
     urdfdom::urdfdom_model
     urdfdom::urdfdom_world
     urdfdom::urdfdom_sensor
-    urdfdom::urdfdom_model_state
     assimp::assimp
     TKernel TKMath TKG3d TKBRep
 )

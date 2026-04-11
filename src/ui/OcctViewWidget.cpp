@@ -1,9 +1,14 @@
 #include "OcctViewWidget.h"
 
-// Windows 必须在 OCCT Window 头之前
+#ifdef _WIN32
 #include <windows.h>
 #include <WNT_Window.hxx>
+#elif defined(__APPLE__)
+#include <Cocoa_Window.hxx>
+#else
+#include <Xw_Window.hxx>
 #include <Aspect_DisplayConnection.hxx>
+#endif
 #include <OpenGl_GraphicDriver.hxx>
 #include <V3d_Viewer.hxx>
 #include <V3d_View.hxx>
@@ -111,9 +116,15 @@ void OcctViewWidget::InitOcct()
     // 3. View
     view_ = viewer_->CreateView();
 
-    // 4. 绑定到 Qt Widget 的 HWND
-    HWND hwnd = reinterpret_cast<HWND>(winId());
-    occtWindow_ = new WNT_Window(hwnd);
+    // 4. 绑定到 Qt Widget 的 native handle（跨平台）
+#ifdef _WIN32
+    occtWindow_ = new WNT_Window(reinterpret_cast<HWND>(winId()));
+#elif defined(__APPLE__)
+    occtWindow_ = new Cocoa_Window(reinterpret_cast<NSView*>(winId()));
+#else
+    Handle(Aspect_DisplayConnection) xdisp = new Aspect_DisplayConnection();
+    occtWindow_ = new Xw_Window(xdisp, (Window)winId());
+#endif
     view_->SetWindow(occtWindow_);
     if (!occtWindow_->IsMapped()) occtWindow_->Map();
 
