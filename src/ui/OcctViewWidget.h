@@ -52,9 +52,8 @@ private:
     bool                           initialized_ = false;
 
     QPoint last_pos_;
-    bool   rotating_     = false;
-    bool   panning_      = false;
-    bool   drag_started_ = false;
+    bool   rotating_ = false;
+    bool   panning_  = false;
 };
 
 } // namespace ui
